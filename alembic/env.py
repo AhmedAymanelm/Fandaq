@@ -3,7 +3,12 @@ Alembic environment configuration for async SQLAlchemy.
 """
 
 import asyncio
+import os
+import sys
 from logging.config import fileConfig
+
+# Add app's root to sys.path so 'app' module can be imported
+sys.path.insert(0, os.path.realpath(os.path.join(os.path.dirname(__file__), '..')))
 
 from alembic import context
 from sqlalchemy import pool
