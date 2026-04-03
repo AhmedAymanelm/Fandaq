@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>X — لوحة التحكم</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<link href="https://cdn.jsdelivr.net/npm/@sweetalert2/theme-dark@4/dark.css" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.js"></script>
+<link rel="stylesheet" href="css/style.css?v=1.5"/>
+</head>
+<body>
+
+<!-- ════════ LOGIN ════════ -->
+<div id="login-screen">
+  <div class="login-card">
+    <div class="login-logo">
+      <span class="icon">🏨</span>
+      <h1>X</h1>
+      <p>لوحة تحكم إدارة الفنادق</p>
+    </div>
+    <div class="login-error" id="login-error"></div>
+    <div class="form-group">
+      <label>اسم المستخدم</label>
+      <input type="text" id="inp-user" placeholder="admin" autocomplete="username"/>
+    </div>
+    <div class="form-group">
+      <label>كلمة المرور</label>
+      <input type="password" id="inp-pass" placeholder="••••••••" autocomplete="current-password"/>
+    </div>
+    <button class="btn-login" id="btn-login" onclick="doLogin()">دخول ←</button>
+    <p class="login-hint" style="margin-top:4px;font-size:10px;color:var(--border)">شركة X لإدارة الفنادق</p>
+  </div>
+</div>
+
+<!-- ════════ APP ════════ -->
+<div id="app">
+  <div class="sidebar-overlay" id="sidebar-overlay" onclick="toggleSidebar()"></div>
+  <!-- Sidebar -->
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-header">
+      <div class="sidebar-hotel">
+        <div class="hotel-icon">🏢</div>
+        <div>
+          <div class="hotel-name">X</div>
+          <div class="hotel-sub">إدارة الفنادق</div>
+        </div>
+      </div>
+      <div class="hotel-selector" id="hotel-selector-wrap">
+        <select id="hotel-selector" onchange="switchHotel(this.value)">
+          <option value="">⏳ جاري تحميل الفنادق...</option>
+        </select>
+      </div>
+    </div>
+    <nav class="sidebar-nav">
+      <button class="nav-item active" onclick="nav('overview')" id="nav-overview" data-roles="admin,supervisor">
+        <span class="nav-icon">📊</span> الرئيسية
+      </button>
+      <button class="nav-item" onclick="nav('reservations')" id="nav-reservations" data-roles="admin,supervisor,employee">
+        <span class="nav-icon">📋</span> الحجوزات
+        <span class="nav-badge" id="pending-badge" style="display:none">0</span>
+      </button>
+      <button class="nav-item" onclick="nav('rooms')" id="nav-rooms" data-roles="admin,supervisor,employee">
+        <span class="nav-icon">🛏️</span> الغرف
+      </button>
+      <button class="nav-item" onclick="nav('reports')" id="nav-reports" data-roles="admin">
+        <span class="nav-icon">💰</span> التقارير المالية
+      </button>
+      <button class="nav-item" onclick="nav('complaints')" id="nav-complaints" data-roles="admin,supervisor,employee">
+        <span class="nav-icon">⚠️</span> الشكاوى والطلبات
+        <span class="nav-badge" id="complaints-badge" style="display:none">0</span>
+      </button>
+      <button class="nav-item" onclick="nav('hotels')" id="nav-hotels" data-roles="admin">
+        <span class="nav-icon">🌍</span> الفنادق
+      </button>
+      <button class="nav-item" onclick="nav('roomsetup')" id="nav-roomsetup" data-roles="admin">
+        <span class="nav-icon">⚙️</span> إعداد الغرف
+      </button>
+      <button class="nav-item" onclick="nav('expenses')" id="nav-expenses" data-roles="admin">
+        <span class="nav-icon">💸</span> المصروفات
+      </button>
+      <button class="nav-item" onclick="nav('dailypricing')" id="nav-dailypricing" data-roles="admin,supervisor">
+        <span class="nav-icon">📈</span> التسعير اليومي
+      </button>
+      <button class="nav-item" onclick="nav('guests')" id="nav-guests" data-roles="admin,supervisor,employee">
+        <span class="nav-icon">👥</span> الضيوف
+      </button>
+      <button class="nav-item" onclick="nav('reviews')" id="nav-reviews" data-roles="admin,supervisor">
+        <span class="nav-icon">⭐</span> التقييمات
+      </button>
+      <button class="nav-item" onclick="nav('users')" id="nav-users" data-roles="admin">
+        <span class="nav-icon">🔑</span> الإدارة والموظفين
+      </button>
+      <button class="nav-item" onclick="nav('settings')" id="nav-settings" data-roles="admin,supervisor,employee">
+        <span class="nav-icon">⚙️</span> الإعدادات
+      </button>
+    </nav>
+    <div class="sidebar-footer">
+      <button class="btn-logout" onclick="doLogout()">🚪 تسجيل الخروج</button>
+    </div>
+  </aside>
+
+  <!-- Main -->
+  <div class="main-area">
+    <div class="topbar">
+      <div style="display:flex;align-items:center;gap:12px">
+        <button class="mobile-menu-btn" onclick="toggleSidebar()">☰</button>
+        <h2 id="page-title">الرئيسية</h2>
+      </div>
+      <div class="topbar-right">
+        <span class="topbar-time" id="topbar-time"></span>
+        <button class="topbar-refresh" onclick="refreshPage()">🔄 تحديث</button>
+      </div>
+    </div>
+    <div class="content" id="content">
+      <div class="loading"><div class="spinner"></div> جاري التحميل...</div>
+    </div>
+  </div>
+</div>
+
+<!-- Custom Modal -->
+<div class="modal-overlay" id="modal-overlay">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title" id="modal-title">Title</div>
+      <button class="modal-close" onclick="closeModal()">×</button>
+    </div>
+    <div class="modal-body" id="modal-body"></div>
+    <div class="modal-footer" id="modal-footer"></div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script src="js/api.js?v=2.0" defer></script>
+<script src="js/ui.js?v=2.0" defer></script>
+
+<!-- Modular Views -->
+<script src="js/views/overview.js?v=2.0" defer></script>
+<script src="js/views/reservations.js?v=2.0" defer></script>
+<script src="js/views/rooms.js?v=2.0" defer></script>
+<script src="js/views/reports.js?v=2.0" defer></script>
+<script src="js/views/complaints.js?v=2.0" defer></script>
+<script src="js/views/hotels.js?v=2.0" defer></script>
+<script src="js/views/roomsetup.js?v=2.0" defer></script>
+<script src="js/views/expenses.js?v=2.0" defer></script>
+<script src="js/views/guests.js?v=2.0" defer></script>
+<script src="js/views/reviews.js?v=2.0" defer></script>
+<script src="js/views/dailypricing.js?v=2.0" defer></script>
+<script src="js/views/users.js?v=2.0" defer></script>
+<script src="js/views/settings.js?v=2.0" defer></script>
+
+<script src="js/app.js?v=2.0" defer></script>
+<script src="js/auth.js?v=2.0" defer></script>
+</body>
+</html>
