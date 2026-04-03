@@ -131,7 +131,7 @@ class ReservationService:
             "room_type": room_type.name,
             "check_in": str(check_in),
             "check_out": str(check_out),
-            "total_price": float(total_price),
+            "total_price": float(final_price),
             "guest_name": guest.name,
             "status": reservation.status.value,
         }
