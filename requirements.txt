@@ -12,6 +12,8 @@ alembic==1.14.1
 # Auth
 python-jose[cryptography]==3.3.0
 passlib[bcrypt]==1.7.4
+PyJWT==2.10.1
+bcrypt==4.2.1
 
 # HTTP Client (WhatsApp API, AI API)
 httpx==0.28.1
