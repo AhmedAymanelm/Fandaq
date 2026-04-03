@@ -22,7 +22,6 @@ from app.api.v1.reviews import router as reviews_router
 from app.api.v1.daily_pricing import router as daily_pricing_router
 from app.api.v1.competitors import router as competitors_router
 from app.api.v1.auth import router as auth_router
-from app.api.v1.users import router as users_router
 
 settings = get_settings()
 
