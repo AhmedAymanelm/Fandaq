@@ -1,0 +1,10 @@
+{
+  "build": {
+    "builder": "NIXPACKS"
+  },
+  "deploy": {
+    "startCommand": "./start.sh",
+    "healthCheckPath": "/health",
+    "restartPolicyType": "ON_FAILURE"
+  }
+}
