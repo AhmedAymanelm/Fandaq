@@ -361,57 +361,77 @@ async def _send_checkout_rating(hotel_id, reservation_id):
 
         async with async_session_factory() as db:
             stmt = (
-            select(Guest.phone, Guest.name, Hotel.whatsapp_phone_number_id, Hotel.name.label("hotel_name"), Hotel.whatsapp_api_token, Hotel.telegram_bot_token)
-            .join(Reservation, Reservation.guest_id == Guest.id)
-            .join(Hotel, Hotel.id == Reservation.hotel_id)
-            .where(Reservation.id == reservation_id, Reservation.hotel_id == hotel_id)
-        )
-        res_db = await db.execute(stmt)
-        row = res_db.first()
-        if row:
-            guest_phone, guest_name, phone_number_id, hotel_name, wa_token, tg_token = row
-            if guest_phone and (phone_number_id or tg_token):
-                rating_msg = (
-                    f"شكراً لإقامتك معنا يا {guest_name or 'ضيفنا الكريم'}! 🙏✨\n\n"
-                    f"نتمنى إن تجربتك في *{hotel_name}* كانت مريحة وتليق بمقامك.\n\n"
-                    f"ياليت تقيّم إقامتك من 1 إلى 5 ⭐\n"
-                    f"(1 = ضعيف، 5 = ممتاز)\n\n"
-                    f"وإذا عندك أي ملاحظات أو اقتراحات، لا تتردد تكتبها معه 📝\n\n"
-                    f"مثال: *5 كل شي كان ممتاز*\n"
-                    f"أو: *3 الغرفة حلوة بس التكييف يحتاج صيانة*"
-                )
-                if guest_phone.startswith("tg_") or (guest_phone.isdigit() and len(guest_phone) <= 10):
-                    from app.config import get_settings
-                    settings = get_settings()
-                    await whatsapp_client.send_telegram_message(
-                        bot_token=tg_token or settings.TELEGRAM_BOT_TOKEN,
-                        chat_id=guest_phone,
-                        message=rating_msg
+                select(Guest.phone, Guest.name, Guest.id.label("guest_id"), Hotel.whatsapp_phone_number_id, Hotel.name.label("hotel_name"), Hotel.whatsapp_api_token, Hotel.telegram_bot_token)
+                .join(Reservation, Reservation.guest_id == Guest.id)
+                .join(Hotel, Hotel.id == Reservation.hotel_id)
+                .where(Reservation.id == reservation_id, Reservation.hotel_id == hotel_id)
+            )
+            res_db = await db.execute(stmt)
+            row = res_db.first()
+            if row:
+                guest_phone, guest_name, guest_id, phone_number_id, hotel_name, wa_token, tg_token = row
+                if guest_phone and (phone_number_id or tg_token):
+                    # Check if guest had any complaints during this stay
+                    from app.models.complaint import Complaint
+                    complaint_stmt = (
+                        select(Complaint.text)
+                        .where(
+                            Complaint.hotel_id == hotel_id,
+                            Complaint.guest_id == guest_id,
+                        )
+                        .order_by(Complaint.created_at.desc())
+                        .limit(1)
                     )
-                else:
-                    await whatsapp_client.send_text_message(
-                        phone_number_id=phone_number_id,
-                        to=guest_phone,
-                        message=rating_msg,
-                        api_token=wa_token,
+                    complaint_result = await db.execute(complaint_stmt)
+                    last_complaint = complaint_result.scalar_one_or_none()
+
+                    # Dynamic example: use guest's actual complaint or a fixed generic one
+                    if last_complaint:
+                        negative_example = f"أو: *3 {last_complaint}*"
+                    else:
+                        negative_example = "أو: *3 الغرفة حلوة بس التكييف يحتاج صيانة*"
+
+                    rating_msg = (
+                        f"شكراً لإقامتك معنا يا {guest_name or 'ضيفنا الكريم'}! 🙏✨\n\n"
+                        f"نتمنى إن تجربتك في *{hotel_name}* كانت مريحة وتليق بمقامك.\n\n"
+                        f"ياليت تقيّم إقامتك من 1 إلى 5 ⭐\n"
+                        f"(1 = ضعيف، 5 = ممتاز)\n\n"
+                        f"وإذا عندك أي ملاحظات أو اقتراحات، لا تتردد تكتبها معه 📝\n\n"
+                        f"مثال: *5 كل شي كان ممتاز*\n"
+                        f"{negative_example}"
                     )
-                
-                # Append to AI conversational history so the AI knows it asked for a review
-                from app.services.whatsapp_session import WhatsAppSessionService
-                session = await WhatsAppSessionService.get_or_create_session(db, hotel_id, guest_phone)
-                await WhatsAppSessionService.append_to_history(db, session.id, role="assistant", content=rating_msg)
-                
-                # Set pending_rating flag so webhook can intercept rating responses
-                from sqlalchemy import update as sql_update
-                from app.models.whatsapp_session import WhatsAppSession
-                ctx = session.context or {}
-                ctx["pending_rating"] = True
-                await db.execute(
-                    sql_update(WhatsAppSession)
-                    .where(WhatsAppSession.id == session.id)
-                    .values(context=ctx)
-                )
-                await db.commit()
+                    if guest_phone.startswith("tg_") or (guest_phone.isdigit() and len(guest_phone) <= 10):
+                        from app.config import get_settings
+                        settings = get_settings()
+                        await whatsapp_client.send_telegram_message(
+                            bot_token=tg_token or settings.TELEGRAM_BOT_TOKEN,
+                            chat_id=guest_phone,
+                            message=rating_msg
+                        )
+                    else:
+                        await whatsapp_client.send_text_message(
+                            phone_number_id=phone_number_id,
+                            to=guest_phone,
+                            message=rating_msg,
+                            api_token=wa_token,
+                        )
+                    
+                    # Append to AI conversational history so the AI knows it asked for a review
+                    from app.services.whatsapp_session import WhatsAppSessionService
+                    session = await WhatsAppSessionService.get_or_create_session(db, hotel_id, guest_phone)
+                    await WhatsAppSessionService.append_to_history(db, session.id, role="assistant", content=rating_msg)
+                    
+                    # Set pending_rating flag so webhook can intercept rating responses
+                    from sqlalchemy import update as sql_update
+                    from app.models.whatsapp_session import WhatsAppSession
+                    ctx = session.context or {}
+                    ctx["pending_rating"] = True
+                    await db.execute(
+                        sql_update(WhatsAppSession)
+                        .where(WhatsAppSession.id == session.id)
+                        .values(context=ctx)
+                    )
+                    await db.commit()
     except Exception as e:
         import logging
         logging.error(f"Failed to send checkout rating request: {e}")
