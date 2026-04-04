@@ -19,11 +19,11 @@ class Hotel(Base):
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
     )
     name: Mapped[str] = mapped_column(String(255), nullable=False)
-    whatsapp_number: Mapped[str] = mapped_column(
-        String(20), nullable=False, index=True
+    whatsapp_number: Mapped[str | None] = mapped_column(
+        String(20), nullable=True, index=True
     )
-    whatsapp_phone_number_id: Mapped[str] = mapped_column(
-        String(50), nullable=False, index=True,
+    whatsapp_phone_number_id: Mapped[str | None] = mapped_column(
+        String(50), nullable=True, index=True,
         comment="Meta WhatsApp Business phone number ID"
     )
     owner_whatsapp: Mapped[str] = mapped_column(

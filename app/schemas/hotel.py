@@ -9,9 +9,9 @@ from pydantic import BaseModel, Field
 
 class HotelCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=255)
-    whatsapp_number: str = Field(..., min_length=10, max_length=20)
-    whatsapp_phone_number_id: str = Field(..., min_length=1, max_length=50)
-    owner_whatsapp: str = Field(..., min_length=10, max_length=20)
+    owner_whatsapp: str = Field(..., min_length=1, max_length=20)
+    whatsapp_number: str | None = None
+    whatsapp_phone_number_id: str | None = None
     webhook_verify_token: str | None = None
     whatsapp_api_token: str | None = None
     telegram_bot_token: str | None = None
@@ -35,14 +35,14 @@ class HotelUpdate(BaseModel):
 class HotelResponse(BaseModel):
     id: uuid.UUID
     name: str
-    whatsapp_number: str
-    whatsapp_phone_number_id: str
+    whatsapp_number: str | None = None
+    whatsapp_phone_number_id: str | None = None
     owner_whatsapp: str
     whatsapp_api_token: str | None = None
     telegram_bot_token: str | None = None
-    address: str | None
+    address: str | None = None
     is_active: bool
-    settings: dict | None
+    settings: dict | None = None
     created_at: datetime
     updated_at: datetime
 
