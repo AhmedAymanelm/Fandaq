@@ -1,9 +1,9 @@
 """
-Hotel WhatsApp SaaS — FastAPI Application Entry Point
+RAHATY — FastAPI Application Entry Point
 """
 
 from contextlib import asynccontextmanager
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 import os
@@ -54,6 +54,18 @@ app = FastAPI(
     version="1.0.0",
     lifespan=lifespan,
 )
+
+
+@app.middleware("http")
+async def disable_cache_for_dashboard_and_api(request: Request, call_next):
+    """Prevent stale dashboard assets and API responses in browsers/proxies."""
+    response = await call_next(request)
+    path = request.url.path
+    if path.startswith("/dashboard") or path.startswith(settings.API_V1_PREFIX):
+        response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+        response.headers["Pragma"] = "no-cache"
+        response.headers["Expires"] = "0"
+    return response
 
 # ── CORS ─────────────────────────────────────────────
 app.add_middleware(

@@ -23,7 +23,16 @@ async function apiFetch(path, opts={}) {
       return API_CACHE.get(cacheKey);
   }
 
-  const res = await fetch(API + path, { headers, ...opts });
+    let requestPath = path;
+    if (isGet && opts.useCache === false) {
+            const sep = path.includes('?') ? '&' : '?';
+            requestPath = `${path}${sep}_=${Date.now()}`;
+    }
+
+    const fetchOpts = { headers, ...opts, cache: 'no-store' };
+    delete fetchOpts.useCache;
+
+    const res = await fetch(API + requestPath, fetchOpts);
   if (res.status === 401 || res.status === 403) {
       if (path !== '/auth/login') {
           sessionStorage.removeItem('token');

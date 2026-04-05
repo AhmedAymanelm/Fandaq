@@ -9,11 +9,13 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
 from sqlalchemy.exc import IntegrityError
 
+from app.api.deps import require_role_for_hotel
 from app.database import get_db
 from app.models.daily_pricing import DailyPricing
+from app.models.room_type import RoomType
+from app.models.user import UserRole
 from app.schemas.daily_pricing import (
     DailyPricingCreate,
     DailyPricingUpdate,
@@ -21,7 +23,20 @@ from app.schemas.daily_pricing import (
     DailyPricingListResponse,
 )
 
-router = APIRouter(tags=["Daily Pricing"])
+router = APIRouter(
+    tags=["Daily Pricing"],
+    dependencies=[Depends(require_role_for_hotel(UserRole.ADMIN, UserRole.SUPERVISOR))],
+)
+
+
+async def _validate_room_type_belongs_to_hotel(
+    db: AsyncSession,
+    hotel_id: uuid.UUID,
+    room_type_id: uuid.UUID,
+) -> None:
+    room_type = await db.get(RoomType, room_type_id)
+    if not room_type or room_type.hotel_id != hotel_id:
+        raise HTTPException(status_code=400, detail="Invalid room_type_id for this hotel")
 
 
 @router.get(
@@ -71,13 +86,15 @@ async def create_daily_pricing(
 ):
     """Create a daily pricing entry."""
     pricing_date = data.date if data.date else date.today()
+    await _validate_room_type_belongs_to_hotel(db, hotel_id, data.room_type_id)
     
     pricing = DailyPricing(
         hotel_id=hotel_id,
         competitor_hotel_name=data.competitor_hotel_name,
         date=pricing_date,
         my_price=data.my_price,
-        competitor_price=data.competitor_price
+        competitor_price=data.competitor_price,
+        room_type_id=data.room_type_id,
     )
     
     try:
@@ -88,7 +105,7 @@ async def create_daily_pricing(
         await db.rollback()
         raise HTTPException(
             status_code=400, 
-            detail=f"Pricing for {data.competitor_hotel_name} on {pricing_date} already exists."
+            detail=f"Pricing for {data.competitor_hotel_name} on {pricing_date} and selected room type already exists."
         )
 
     return DailyPricingResponse.model_validate(pricing)
@@ -116,6 +133,9 @@ async def update_daily_pricing(
         raise HTTPException(status_code=404, detail="Daily pricing entry not found")
 
     update_data = data.model_dump(exclude_unset=True)
+    if "room_type_id" in update_data and update_data["room_type_id"] is not None:
+        await _validate_room_type_belongs_to_hotel(db, hotel_id, update_data["room_type_id"])
+
     for field, value in update_data.items():
         setattr(pricing, field, value)
 
@@ -228,184 +248,26 @@ async def send_daily_pricing_report(
     report_date: date = Query(..., alias="date"),
     db: AsyncSession = Depends(get_db),
 ):
-    """Manually send the daily pricing report to the hotel owner."""
+    """Manually send combined report to admin/supervisor emails (pricing two days + staff performance)."""
     from app.models.hotel import Hotel
-    from app.whatsapp.client import whatsapp_client
+    from app.services.report_delivery import send_combined_pricing_staff_report
 
     hotel = await db.get(Hotel, hotel_id)
     if not hotel:
         raise HTTPException(404, "Hotel not found")
 
-    stmt = select(DailyPricing).where(
-        DailyPricing.hotel_id == hotel_id,
-        DailyPricing.date == report_date
-    ).order_by(DailyPricing.my_price.asc())
-    
-    result = await db.execute(stmt)
-    prices = result.scalars().all()
-
-    if not prices:
-        return {"success": False, "message": "No pricing found for this date"}
-
-    msg_lines = [
-        f"📊 *تقرير أسعار المنافسين اليومي*",
-        f"🏨 الفندق: *{hotel.name}*",
-        f"📅 التاريخ: {report_date.strftime('%Y-%m-%d')}\n"
-    ]
-
-    for p in prices:
-        diff = float(p.my_price - p.competitor_price)
-        if diff > 0:
-            diff_mark = f"أغلى منا بـ {diff}" # wait, if my_price is larger, we are more expensive
-            diff_mark = f"أرخص منا بـ {diff}"
-        elif diff < 0:
-            diff_mark = f"أغلى منا بـ {abs(diff)}"
-        else:
-            diff_mark = "نفس السعر"
-            
-        msg_lines.append(f"• *{p.competitor_hotel_name}*: {float(p.competitor_price)} ريال (نحن: {float(p.my_price)} ريال) ⟵ {diff_mark}")
-
-    msg_lines.append("\nتم إصدار التقرير من نظام إدارة الفنادق الذكي ✨")
-    message = "\n".join(msg_lines)
-
-    xlsx_bytes = None
-    try:
-        import io
-        from openpyxl import Workbook
-        from openpyxl.styles import Font, Alignment
-        from app.services.email_service import send_email_with_attachment
-
-        wb = Workbook()
-        ws = wb.active
-        ws.title = "التسعير اليومي"
-        ws.sheet_view.rightToLeft = True
-
-        headers = ["اسم الفندق المنافس", "تاريخ التسعيرة", "سعر الفندق المنافس", "سعر فندقنا", "الفرق"]
-        ws.append(headers)
-        
-        for cell in ws[1]:
-            cell.font = Font(bold=True)
-            cell.alignment = Alignment(horizontal="center")
-
-        for p in prices:
-            diff = float(p.my_price - p.competitor_price)
-            if diff > 0:
-                diff_text = f"أغلى بـ {diff}"
-            elif diff < 0:
-                diff_text = f"أرخص بـ {abs(diff)}"
-            else:
-                diff_text = "نفس السعر"
-                
-            ws.append([
-                p.competitor_hotel_name,
-                p.date.strftime("%Y-%m-%d"),
-                float(p.competitor_price),
-                float(p.my_price),
-                diff_text
-            ])
-
-        output = io.BytesIO()
-        wb.save(output)
-        xlsx_bytes = output.getvalue()
-        output.close()
-        wb.close()
-        import logging
-        logging.getLogger(__name__).info(f"📊 Excel report generated: {len(xlsx_bytes)} bytes")
-    except Exception as e:
-        import logging
-        logging.getLogger(__name__).error(f"❌ Failed to generate excel report for {hotel.name}: {e}")
-        xlsx_bytes = None
-
-    # Send Email if owner_email exists
-    email_success = False
-    if hotel.owner_email and xlsx_bytes:
-        try:
-            # AI generated email body
-            ai_body = "مرفق طيه تقرير أسعار المنافسين اليومي بصيغة نظام إدارة الفنادق الذكي.\n\n" + message
-            try:
-                from app.config import get_settings
-                from openai import AsyncOpenAI
-                settings_ai = get_settings()
-                if settings_ai.OPENAI_API_KEY:
-                    ai_client = AsyncOpenAI(api_key=settings_ai.OPENAI_API_KEY)
-                    ai_prompt = (
-                        f"أنت مساعد افتراضي ذكي يعمل في 'نظام إدارة الفنادق الذكي'. "
-                        f"اكتب رسالة بريد إلكتروني رسمية، مرحبة، وقصيرة إلى مدير فندق '{hotel.name}'.\n\n"
-                        f"قم بالترحيب به بصفته مدير الفندق، ولخص له أسعار المنافسين اليوم بناءً على هذا التقرير النصي:\n"
-                        f"{message}\n\n"
-                        f"أخبره بلطف أن التقرير التفصيلي لمعرفة كافة الفروقات مرفق كملف إكسل مع هذا الإيميل لتسهيل قراءته. "
-                        f"تحدث بلغة عربية فصحى احترافية ولا تضف أرقاماً من كيسك. كن مباشراً ولبقاً."
-                    )
-                    ai_response = await ai_client.chat.completions.create(
-                        model=settings_ai.OPENAI_MODEL,
-                        messages=[{"role": "user", "content": ai_prompt}],
-                        max_tokens=1500,
-                    )
-                    ai_body = ai_response.choices[0].message.content
-                    # Append hidden marker for AI agent identification
-                    ai_body += f"\n\n[HID:{hotel.id}]"
-            except Exception as ai_e:
-                pass
-
-            await send_email_with_attachment(
-                to_email=hotel.owner_email,
-                subject=f"تقرير أسعار المنافسين - {hotel.name} - {report_date.strftime('%Y-%m-%d')}",
-                body_text=ai_body,
-                attachment_name=f"daily_pricing_{report_date.strftime('%Y%m%d')}.xlsx",
-                attachment_bytes=xlsx_bytes
-            )
-            email_success = True
-        except ValueError as ve:
-            import logging
-            logging.getLogger(__name__).error(f"Email config error: {ve}")
-        except Exception as e:
-            import logging
-            logging.getLogger(__name__).error(f"Email sending failed: {e}")
-            raise HTTPException(400, f"فشل إرسال الإيميل. تأكد من الباسوورد والإيميل: {str(e)}")
-
-    # Use telegram if preferred, or whatsapp
-    hotel_settings = hotel.settings or {}
-    tg_token = hotel.telegram_bot_token or hotel_settings.get("telegram_bot_token")
-    
-    from app.config import get_settings
-    settings_app = get_settings()
-    tg_tok = tg_token or settings_app.TELEGRAM_BOT_TOKEN
-    wa_id = hotel.whatsapp_phone_number_id or settings_app.WHATSAPP_PHONE_NUMBER_ID
-
-    send_result = None
-
-    # Check length to guess if it's telegram chat ID or phone number
-    is_mostly_telegram = hotel.owner_whatsapp.startswith("tg_") or (hotel.owner_whatsapp.isdigit() and len(hotel.owner_whatsapp) <= 10)
-
-    if is_mostly_telegram and tg_tok:
-        send_result = await whatsapp_client.send_telegram_message(
-            bot_token=tg_tok,
-            chat_id=hotel.owner_whatsapp,
-            message=message
-        )
-    elif wa_id and hotel.owner_whatsapp:
-        send_result = await whatsapp_client.send_text_message(
-            phone_number_id=wa_id,
-            to=hotel.owner_whatsapp,
-            message=message,
-            api_token=hotel.whatsapp_api_token
-        )
-    elif tg_tok and hotel.owner_whatsapp:
-         # Fallback to telegram if WA is missing entirely
-         send_result = await whatsapp_client.send_telegram_message(
-            bot_token=tg_tok,
-            chat_id=hotel.owner_whatsapp,
-            message=message
-        )
-
-    if send_result and "error" in send_result and not email_success:
-        import logging
-        logging.getLogger(__name__).error(f"❌ Both WhatsApp and Email failed for {hotel.name}. WA Error: {send_result['error']}")
-        raise HTTPException(400, f"فشل الإرسال بكل القنوات: {send_result['error']}")
+    result = await send_combined_pricing_staff_report(
+        db=db,
+        hotel=hotel,
+        report_date=report_date,
+        staff_days=30,
+    )
+    if not result.get("success"):
+        raise HTTPException(400, result.get("message", "فشل إرسال التقرير"))
 
     return {
-        "success": True, 
-        "message": "تم إرسال التقرير بنجاح",
-        "email_sent": email_success,
-        "whatsapp_sent": not (send_result and "error" in send_result)
+        "success": True,
+        "message": "تم إرسال التقرير الموحد بنجاح للمدير/المشرف",
+        "recipients": result.get("recipients", []),
+        "delivery_channel": "email",
     }

@@ -11,8 +11,8 @@ async function loadComplaints() {
   }
 
   const [comps, reqs] = await Promise.all([
-    apiFetch(`/hotels/${HOTEL_ID}/complaints?limit=100`, { useCache: true }).catch(() => ({ complaints: [] })),
-    apiFetch(`/hotels/${HOTEL_ID}/guest-requests?limit=100`, { useCache: true }).catch(() => ({ requests: [] }))
+    apiFetch(`/hotels/${HOTEL_ID}/complaints?limit=100`, { useCache: false }).catch(() => ({ complaints: [] })),
+    apiFetch(`/hotels/${HOTEL_ID}/guest-requests?limit=100`, { useCache: false }).catch(() => ({ requests: [] }))
   ]);
   const complaints = comps.complaints || []; const requests = reqs.requests || [];
   GLOBAL_DATA.all_comps = complaints; GLOBAL_DATA.all_reqs = requests;
@@ -53,8 +53,9 @@ function filterCompReq(q) {
 }
 
 function renderComplaints(list) {
+  const canSeeActor = CURRENT_USER && ['admin', 'supervisor'].includes(CURRENT_USER.role);
   if (!list.length) return '<div class="empty-state"><div class="emoji">🎉</div>لا توجد شكاوى</div>';
-  return `<div class="table-card"><table><thead><tr><th>الغرفة والضيف</th><th>النص</th><th>التاريخ</th><th>الحالة</th><th>تحديث</th></tr></thead>
+  return `<div class="table-card"><table><thead><tr><th>الغرفة والضيف</th><th>النص</th><th>التاريخ</th><th>الحالة</th>${canSeeActor ? '<th>تم الحل بواسطة</th>' : ''}<th>تحديث</th></tr></thead>
     <tbody>${list.map(c => {
       let guestInfo = '<span style="color:var(--text-muted);font-size:12px">غير محدد</span>';
       if (c.guest_name) {
@@ -66,6 +67,7 @@ function renderComplaints(list) {
       <td>${guestInfo}</td>
       <td style="max-width:300px">${c.text}</td><td>${fmtDate(c.created_at)}</td>
       <td>${badgeHtml(c.status)}</td>
+      ${canSeeActor ? `<td>${c.resolved_by_name || '—'}</td>` : ''}
       <td><select onchange="updateComplaint('${c.id}', this.value)" style="font-size:11px">
         <option value="open" ${c.status === 'open' ? 'selected' : ''}>مفتوح</option>
         <option value="in_progress" ${c.status === 'in_progress' ? 'selected' : ''}>جاري</option>
@@ -90,13 +92,10 @@ async function updateComplaint(id, status) {
   try {
     await apiFetch(`/hotels/${HOTEL_ID}/complaints/${id}`, { method: 'PATCH', body: JSON.stringify({ status }) });
     showToast('تم تحديث حالة الشكوى'); 
-    
-    // Update local state instantly to avoid delays and clears cache
+
+    // Refresh from backend so actor/status metadata stays accurate.
     if(typeof clearApiCache === 'function') clearApiCache();
-    const c = GLOBAL_DATA.all_comps.find(x => x.id === id);
-    if(c) c.status = status;
-    
-    renderCompReqUI();
+    await loadComplaints();
     loadBadges();
   } catch (e) { showToast('فشل التحديث', 'error'); }
 }

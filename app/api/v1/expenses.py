@@ -8,11 +8,13 @@ from datetime import date
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.deps import require_role_for_hotel
 from app.database import get_db
+from app.models.user import UserRole
 from app.schemas.expense import ExpenseCreate, ExpenseResponse, ExpenseListResponse
 from app.services.expense import ExpenseService
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(require_role_for_hotel(UserRole.ADMIN))])
 
 
 @router.post(

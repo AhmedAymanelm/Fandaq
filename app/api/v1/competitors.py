@@ -7,15 +7,20 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.deps import require_role_for_hotel
 from app.database import get_db
 from app.models.competitor import Competitor
+from app.models.user import UserRole
 from app.schemas.competitor import (
     CompetitorCreate,
     CompetitorResponse,
     CompetitorListResponse,
 )
 
-router = APIRouter(tags=["Competitors"])
+router = APIRouter(
+    tags=["Competitors"],
+    dependencies=[Depends(require_role_for_hotel(UserRole.ADMIN, UserRole.SUPERVISOR))],
+)
 
 
 @router.get(

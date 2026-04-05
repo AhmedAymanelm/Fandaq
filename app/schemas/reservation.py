@@ -48,6 +48,8 @@ class ReservationDetailResponse(ReservationResponse):
     guest_phone: str | None = None
     room_type_name: str | None = None
     room_number: str | None = None
+    approved_by_name: str | None = None
+    approved_at: datetime | None = None
 
 
 class ReservationListResponse(BaseModel):

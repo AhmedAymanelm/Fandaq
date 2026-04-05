@@ -42,6 +42,18 @@ class Reservation(Base):
         UUID(as_uuid=True), ForeignKey("room_types.id", ondelete="CASCADE"),
         nullable=False
     )
+    approved_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True, index=True,
+        comment="User who approved this reservation"
+    )
+    approved_by_name: Mapped[str | None] = mapped_column(
+        String(255), nullable=True,
+        comment="Snapshot name of approver"
+    )
+    approved_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     guest_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("guests.id", ondelete="CASCADE"),
         nullable=False

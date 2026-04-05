@@ -8,7 +8,7 @@ from functools import lru_cache
 
 class Settings(BaseSettings):
     # ── Application ──────────────────────────────────
-    APP_NAME: str = "Hotel WhatsApp SaaS"
+    APP_NAME: str = "RAHATY"
     DEBUG: bool = False
     API_V1_PREFIX: str = "/api/v1"
 

@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 420 520" role="img" aria-label="RAHTI Hotels Group logo">
+  <defs>
+    <linearGradient id="teal" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0f5b66"/>
+      <stop offset="100%" stop-color="#0a3f47"/>
+    </linearGradient>
+    <linearGradient id="gold" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#b2904c"/>
+      <stop offset="100%" stop-color="#ead9a8"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="420" height="520" rx="24" fill="none"/>
+
+  <path d="M95 62c0-16 13-29 29-29h98c53 0 85 27 85 70 0 26-13 45-37 57 33 9 53 31 53 67 0 56-40 89-109 89H124c-16 0-29-13-29-29V62zm81 28v62h43c24 0 38-11 38-31 0-19-14-31-38-31h-43zm0 117v72h56c31 0 48-13 48-36 0-24-17-36-48-36h-56z" fill="url(#teal)"/>
+
+  <path d="M278 62c58 8 101 43 108 101-57 10-106 50-125 108-35 1-66-13-93-40 18-57 54-97 110-121z" fill="url(#gold)" opacity="0.95"/>
+
+  <path d="M147 211c25-3 48-12 67-27 8-6 16-13 22-20 6 15 7 31 3 47-9 34-36 66-79 96-16 11-35 20-57 29 9-41 24-76 44-102z" fill="url(#gold)"/>
+
+  <text x="210" y="390" text-anchor="middle" font-size="50" font-family="Georgia, 'Times New Roman', serif" letter-spacing="9" fill="#123f49" font-weight="700">RAHTI</text>
+  <text x="210" y="435" text-anchor="middle" font-size="44" font-family="'Noto Naskh Arabic', 'Amiri', serif" fill="#123f49" font-weight="700">راحتي</text>
+</svg>

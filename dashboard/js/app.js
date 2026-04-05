@@ -7,8 +7,7 @@ async function initApp() {
 
   // 1. Fetch ALL hotels
   try {
-    const res = await fetch(`${API}/hotels`);
-    const data = await res.json();
+    const data = await apiFetch('/hotels');
     const hotels = data.hotels || [];
     GLOBAL_DATA.all_hotels_list = hotels;
 
@@ -24,10 +23,16 @@ async function initApp() {
   } catch(e) { showToast('تعذر الاتصال بالخادم', 'error'); }
 
   // 2. Initial Route
+  if (!HOTEL_ID) {
+    document.getElementById('content').innerHTML =
+      '<div class="empty-state" style="margin-top:40px">لا يوجد فندق مرتبط بهذا الحساب حالياً.</div>';
+    return;
+  }
+
   if (CURRENT_USER && CURRENT_USER.role === 'employee') {
-      nav('reservations');
+    nav('reservations');
   } else {
-      nav('overview');
+    nav('overview');
   }
 
   // 3. Load room types + badges in background
@@ -160,7 +165,7 @@ const pageTitles = {
   rooms: 'الغرف', reports: 'التقارير المالية', complaints: 'الشكاوى والطلبات',
   hotels: 'الفنادق', roomsetup: 'إعداد الغرف', expenses: 'المصروفات',
   guests: 'الضيوف', reviews: 'التقييمات', dailypricing: 'التسعير اليومي',
-  users: 'الإدارة والموظفين', settings: 'الإعدادات'
+  users: 'الإدارة والموظفين', staffperformance: 'تقييم الموظفين', settings: 'الإعدادات'
 };
 function nav(page) {
   // Check if role has access
@@ -202,7 +207,7 @@ function nav(page) {
     rooms: loadRooms, reports: loadReports, complaints: loadComplaints,
     hotels: loadHotels, roomsetup: loadRoomSetup, expenses: loadExpenses,
     guests: loadGuests, reviews: loadReviews, dailypricing: loadDailyPricing,
-    users: loadUsers, settings: loadSettings
+    users: loadUsers, staffperformance: loadStaffPerformance, settings: loadSettings
   };
 
   fns[page]?.().then(() => {

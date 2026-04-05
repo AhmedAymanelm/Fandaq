@@ -7,15 +7,19 @@ import uuid
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.deps import require_role_for_hotel
 from app.database import get_db
 from app.models.complaint import ComplaintStatus
+from app.models.user import User, UserRole
 from app.schemas.complaint import (
     ComplaintCreate, ComplaintResponse,
     ComplaintStatusUpdate, ComplaintListResponse,
 )
 from app.services.complaint import ComplaintService
 
-router = APIRouter()
+router = APIRouter(
+    dependencies=[Depends(require_role_for_hotel(UserRole.ADMIN, UserRole.SUPERVISOR, UserRole.EMPLOYEE))]
+)
 
 
 @router.post(
@@ -50,9 +54,6 @@ async def list_complaints(
     return result
 
 
-from app.models.user import User
-from app.api.deps import get_current_user
-
 @router.patch(
     "/hotels/{hotel_id}/complaints/{complaint_id}",
     response_model=ComplaintResponse,
@@ -62,7 +63,7 @@ async def update_complaint_status(
     complaint_id: uuid.UUID,
     data: ComplaintStatusUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_role_for_hotel(UserRole.ADMIN, UserRole.SUPERVISOR, UserRole.EMPLOYEE)),
 ):
     """Update complaint status."""
     from app.whatsapp.client import WhatsAppClient
@@ -70,7 +71,7 @@ async def update_complaint_status(
     from app.config import get_settings
         
     complaint = await ComplaintService.update_status(
-        db, hotel_id, complaint_id, data.status
+        db, hotel_id, complaint_id, data.status, actor_user=current_user
     )
     if not complaint:
         raise HTTPException(status_code=404, detail="Complaint not found")

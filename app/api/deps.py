@@ -59,6 +59,42 @@ def require_role(*allowed_roles: UserRole):
     return role_checker
 
 
+async def require_hotel_access(
+    hotel_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+) -> User:
+    """Ensure non-admin users can only access their own hotel's resources."""
+    if current_user.role != UserRole.ADMIN and current_user.hotel_id != hotel_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied for this hotel",
+        )
+    return current_user
+
+
+def require_role_for_hotel(*allowed_roles: UserRole):
+    """Dependency factory that checks both role and hotel-scoped access."""
+
+    async def role_and_hotel_checker(
+        hotel_id: uuid.UUID,
+        current_user: User = Depends(get_current_user),
+    ) -> User:
+        if current_user.role not in allowed_roles:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Not enough permissions",
+            )
+
+        if current_user.role != UserRole.ADMIN and current_user.hotel_id != hotel_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied for this hotel",
+            )
+        return current_user
+
+    return role_and_hotel_checker
+
+
 # ── Database Session ─────────────────────────────────
 
 DbSession = Annotated[AsyncSession, Depends(get_db)]

@@ -78,6 +78,7 @@ class AuthService:
     async def create_user(
         db: AsyncSession,
         username: str,
+        email: str | None,
         password: str,
         full_name: str,
         role: str,
@@ -86,6 +87,7 @@ class AuthService:
         """Create a new user."""
         user = User(
             username=username,
+            email=email.strip().lower() if email else None,
             password_hash=hash_password(password),
             full_name=full_name,
             role=UserRole(role),
@@ -164,6 +166,30 @@ class AuthService:
             return None
 
         user.full_name = full_name
+        await db.commit()
+        await db.refresh(user)
+        return user
+
+    @staticmethod
+    async def update_user_email(
+        db: AsyncSession,
+        user_id: uuid.UUID,
+        email: str,
+    ) -> User | None:
+        """Update user email for report delivery."""
+        normalized = email.strip().lower()
+
+        duplicate_stmt = select(User).where(User.email == normalized, User.id != user_id)
+        duplicate = (await db.execute(duplicate_stmt)).scalar_one_or_none()
+        if duplicate:
+            raise ValueError("الإيميل مستخدم بالفعل")
+
+        stmt = select(User).where(User.id == user_id)
+        user = (await db.execute(stmt)).scalar_one_or_none()
+        if not user:
+            return None
+
+        user.email = normalized
         await db.commit()
         await db.refresh(user)
         return user

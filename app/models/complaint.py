@@ -6,7 +6,7 @@ import enum
 import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, Enum, ForeignKey, Text, func
+from sqlalchemy import DateTime, Enum, ForeignKey, String, Text, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -36,6 +36,15 @@ class Complaint(Base):
     text: Mapped[str] = mapped_column(Text, nullable=False)
     status: Mapped[ComplaintStatus] = mapped_column(
         Enum(ComplaintStatus), default=ComplaintStatus.OPEN, nullable=False
+    )
+    resolved_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True, index=True,
+        comment="User who resolved this complaint"
+    )
+    resolved_by_name: Mapped[str | None] = mapped_column(
+        String(255), nullable=True,
+        comment="Snapshot name of resolver"
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()

@@ -7,7 +7,9 @@ import uuid
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.deps import require_role_for_hotel
 from app.database import get_db
+from app.models.user import UserRole
 from app.models.guest_request import RequestStatus
 from app.schemas.guest_request import (
     GuestRequestCreate, GuestRequestResponse,
@@ -15,7 +17,9 @@ from app.schemas.guest_request import (
 )
 from app.services.guest_request import GuestRequestService
 
-router = APIRouter()
+router = APIRouter(
+    dependencies=[Depends(require_role_for_hotel(UserRole.ADMIN, UserRole.SUPERVISOR, UserRole.EMPLOYEE))]
+)
 
 
 @router.post(

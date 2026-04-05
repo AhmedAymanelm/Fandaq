@@ -8,15 +8,20 @@ from fastapi import APIRouter, HTTPException
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.deps import require_role_for_hotel
 from app.database import get_db
 from fastapi import Depends
 from app.models.review import Review
 from app.models.guest import Guest
+from app.models.user import UserRole
 from app.schemas.guest import (
     ReviewCreate, ReviewResponse, ReviewListResponse,
 )
 
-router = APIRouter(tags=["Reviews"])
+router = APIRouter(
+    tags=["Reviews"],
+    dependencies=[Depends(require_role_for_hotel(UserRole.ADMIN, UserRole.SUPERVISOR))],
+)
 
 
 @router.post(

@@ -3,13 +3,16 @@ Rooms API — manage room types and individual rooms per hotel.
 """
 
 import uuid
+import re
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.deps import require_role_for_hotel
 from app.database import get_db
 from app.models.room import Room
+from app.models.user import UserRole
 from app.models.room_type import RoomType
 from app.schemas.room import (
     RoomCreate, RoomResponse, RoomDetailResponse, RoomStatusUpdate,
@@ -17,6 +20,54 @@ from app.schemas.room import (
 )
 
 router = APIRouter()
+
+
+def _normalize_room_type_name(raw_name: str) -> str:
+    name = (raw_name or "").strip().lower()
+    aliases = {
+        "single": "single",
+        "single-room": "single",
+        "فردية": "single",
+        "فردي": "single",
+        "double": "double",
+        "double-room": "double",
+        "دبل": "double",
+        "زوجية": "double",
+        "suite": "suite",
+        "سويت": "suite",
+        "جناح": "suite",
+        "one-bedroom": "one-bedroom",
+        "غرفة وصالة": "one-bedroom",
+        "two-bedroom": "two-bedroom",
+        "غرفتين وصالة": "two-bedroom",
+        "three-bedroom": "three-bedroom",
+        "ثلاث غرف وصالة": "three-bedroom",
+    }
+    if name in aliases:
+        return aliases[name]
+
+    # Keep custom values unicode-safe while normalizing separators.
+    name = re.sub(r"\s+", "-", name)
+    name = re.sub(r"-+", "-", name).strip("-")
+    return name
+
+
+async def _ensure_room_type_name_unique(
+    db: AsyncSession,
+    hotel_id: uuid.UUID,
+    normalized_name: str,
+    exclude_id: uuid.UUID | None = None,
+) -> None:
+    stmt = select(RoomType).where(
+        RoomType.hotel_id == hotel_id,
+        func.lower(RoomType.name) == normalized_name.lower(),
+    )
+    if exclude_id:
+        stmt = stmt.where(RoomType.id != exclude_id)
+
+    existing = (await db.execute(stmt)).scalar_one_or_none()
+    if existing:
+        raise HTTPException(status_code=400, detail="Room type already exists for this hotel")
 
 
 # ── Room Types ───────────────────────────────────────
@@ -30,9 +81,18 @@ async def create_room_type(
     hotel_id: uuid.UUID,
     data: RoomTypeCreate,
     db: AsyncSession = Depends(get_db),
+    _=Depends(require_role_for_hotel(UserRole.ADMIN)),
 ):
     """Create a room type for a hotel."""
-    room_type = RoomType(hotel_id=hotel_id, **data.model_dump())
+    normalized_name = _normalize_room_type_name(data.name)
+    if not normalized_name:
+        raise HTTPException(status_code=400, detail="Room type name is required")
+
+    await _ensure_room_type_name_unique(db, hotel_id, normalized_name)
+
+    payload = data.model_dump()
+    payload["name"] = normalized_name
+    room_type = RoomType(hotel_id=hotel_id, **payload)
     db.add(room_type)
     await db.flush()
     await db.refresh(room_type)
@@ -43,6 +103,7 @@ async def create_room_type(
 async def list_room_types(
     hotel_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
+    _=Depends(require_role_for_hotel(UserRole.ADMIN, UserRole.SUPERVISOR, UserRole.EMPLOYEE)),
 ):
     """List all room types for a hotel."""
     stmt = select(RoomType).where(RoomType.hotel_id == hotel_id)
@@ -59,6 +120,7 @@ async def update_room_type(
     room_type_id: uuid.UUID,
     data: RoomTypeUpdate,
     db: AsyncSession = Depends(get_db),
+    _=Depends(require_role_for_hotel(UserRole.ADMIN)),
 ):
     """Update a room type."""
     stmt = select(RoomType).where(
@@ -70,7 +132,15 @@ async def update_room_type(
     if not room_type:
         raise HTTPException(status_code=404, detail="Room type not found")
 
-    for key, value in data.model_dump(exclude_unset=True).items():
+    update_data = data.model_dump(exclude_unset=True)
+    if "name" in update_data and update_data["name"] is not None:
+        normalized_name = _normalize_room_type_name(update_data["name"])
+        if not normalized_name:
+            raise HTTPException(status_code=400, detail="Room type name is required")
+        await _ensure_room_type_name_unique(db, hotel_id, normalized_name, exclude_id=room_type.id)
+        update_data["name"] = normalized_name
+
+    for key, value in update_data.items():
         setattr(room_type, key, value)
 
     await db.flush()
@@ -89,6 +159,7 @@ async def delete_room_type(
     hotel_id: uuid.UUID,
     room_type_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
+    _=Depends(require_role_for_hotel(UserRole.ADMIN)),
 ):
     """Delete a room type and recursively delete associated reservations."""
     stmt = select(RoomType).where(
@@ -136,6 +207,7 @@ async def create_room(
     hotel_id: uuid.UUID,
     data: RoomCreate,
     db: AsyncSession = Depends(get_db),
+    _=Depends(require_role_for_hotel(UserRole.ADMIN)),
 ):
     """Create an individual room."""
     room = Room(hotel_id=hotel_id, **data.model_dump())
@@ -149,6 +221,7 @@ async def create_room(
 async def list_rooms(
     hotel_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
+    _=Depends(require_role_for_hotel(UserRole.ADMIN, UserRole.SUPERVISOR, UserRole.EMPLOYEE)),
 ):
     """List all rooms for a hotel with their room type info."""
     stmt = select(Room).where(Room.hotel_id == hotel_id).order_by(Room.room_number)
@@ -188,6 +261,7 @@ async def update_room_status(
     room_id: uuid.UUID,
     data: RoomStatusUpdate,
     db: AsyncSession = Depends(get_db),
+    _=Depends(require_role_for_hotel(UserRole.ADMIN, UserRole.SUPERVISOR, UserRole.EMPLOYEE)),
 ):
     """Update room status (available, occupied, maintenance)."""
     stmt = select(Room).where(Room.id == room_id, Room.hotel_id == hotel_id)
@@ -211,6 +285,7 @@ async def delete_room(
     hotel_id: uuid.UUID,
     room_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
+    _=Depends(require_role_for_hotel(UserRole.ADMIN)),
 ):
     """Delete an individual room."""
     stmt = select(Room).where(Room.id == room_id, Room.hotel_id == hotel_id)

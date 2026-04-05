@@ -86,8 +86,54 @@ function removeRoom(id) {
 }
 
 function showAddRoomTypeModal() {
+  const presetOptions = [
+    { value: 'single', icon: '🛏️', title: 'فردية', subtitle: 'سرير واحد' },
+    { value: 'double', icon: '🛌', title: 'دبل', subtitle: 'سريرين' },
+    { value: 'suite', icon: '👑', title: 'جناح', subtitle: 'Premium Suite' },
+    { value: 'one-bedroom', icon: '🏠', title: 'غرفة وصالة', subtitle: 'One-bedroom' },
+    { value: 'two-bedroom', icon: '🏢', title: 'غرفتين وصالة', subtitle: 'Two-bedroom' },
+    { value: 'three-bedroom', icon: '🏘️', title: 'ثلاث غرف وصالة', subtitle: 'Three-bedroom' },
+    { value: '__custom__', icon: '✨', title: 'مخصص', subtitle: 'اكتب اسم النوع بنفسك' },
+  ];
+
+  const cardsHtml = presetOptions.map((o, idx) => `
+    <button
+      type="button"
+      data-room-preset="${o.value}"
+      onclick="selectRoomTypePreset('${o.value}')"
+      style="
+        border:1px solid ${idx === 0 ? 'var(--primary)' : 'var(--border)'};
+        background:${idx === 0 ? 'rgba(124,58,237,0.18)' : 'rgba(255,255,255,0.02)'};
+        border-radius:12px;
+        padding:10px;
+        text-align:right;
+        cursor:pointer;
+        color:var(--text);
+        transition:all .2s ease;
+      "
+    >
+      <div style="display:flex;align-items:center;gap:8px;font-weight:700">
+        <span>${o.icon}</span>
+        <span>${o.title}</span>
+      </div>
+      <div style="font-size:12px;color:var(--text-muted);margin-top:4px">${o.subtitle}</div>
+    </button>
+  `).join('');
+
   const body = `
-    <div class="form-group"><label>الاسم البرمجي للنوع</label><input type="text" id="m-rt-name" placeholder="مثال: suite"></div>
+    <div class="form-group">
+      <label>نوع الغرفة</label>
+      <input type="hidden" id="m-rt-preset" value="single">
+      <div style="
+        display:grid;
+        grid-template-columns:repeat(auto-fit,minmax(150px,1fr));
+        gap:10px;
+      ">${cardsHtml}</div>
+    </div>
+    <div class="form-group" id="m-rt-custom-wrap" style="display:none">
+      <label>اسم النوع المخصص</label>
+      <input type="text" id="m-rt-custom-name" placeholder="مثال: family-suite أو جناح عائلي">
+    </div>
     <div class="form-group"><label>السعة (عدد الأفراد)</label><input type="number" id="m-rt-cap" value="2"></div>
     <div class="form-group"><label>السعر اليومي</label><input type="number" id="m-rt-d" value="500"></div>
     <div class="form-group"><label>السعر الشهري</label><input type="number" id="m-rt-m" value="12000"></div>
@@ -96,9 +142,50 @@ function showAddRoomTypeModal() {
     <button class="btn" onclick="closeModal()">إلغاء</button>
     <button class="btn btn-primary" onclick="submitRoomType()">حفظ النوع</button>`;
   openModal('➕ إضافة نوع غرف جديد', body, foot);
+  onRoomTypePresetChange();
 }
+
+function selectRoomTypePreset(preset) {
+  const hiddenPreset = document.getElementById('m-rt-preset');
+  if (!hiddenPreset) return;
+  hiddenPreset.value = preset;
+
+  document.querySelectorAll('[data-room-preset]').forEach(el => {
+    const isActive = el.getAttribute('data-room-preset') === preset;
+    el.style.borderColor = isActive ? 'var(--primary)' : 'var(--border)';
+    el.style.background = isActive ? 'rgba(124,58,237,0.18)' : 'rgba(255,255,255,0.02)';
+  });
+
+  onRoomTypePresetChange();
+}
+
+function onRoomTypePresetChange() {
+  const presetEl = document.getElementById('m-rt-preset');
+  const customWrapEl = document.getElementById('m-rt-custom-wrap');
+  const capEl = document.getElementById('m-rt-cap');
+  if (!presetEl || !customWrapEl || !capEl) return;
+
+  const preset = presetEl.value;
+  customWrapEl.style.display = preset === '__custom__' ? 'block' : 'none';
+
+  const capacityDefaults = {
+    single: 1,
+    double: 2,
+    suite: 3,
+    'one-bedroom': 2,
+    'two-bedroom': 4,
+    'three-bedroom': 6,
+  };
+
+  if (capacityDefaults[preset]) {
+    capEl.value = capacityDefaults[preset];
+  }
+}
+
 function submitRoomType() {
-  const name = document.getElementById('m-rt-name').value;
+  const preset = document.getElementById('m-rt-preset').value;
+  const customName = (document.getElementById('m-rt-custom-name')?.value || '').trim();
+  const name = preset === '__custom__' ? customName : preset;
   const cap = document.getElementById('m-rt-cap').value;
   const dRate = document.getElementById('m-rt-d').value;
   const mRate = document.getElementById('m-rt-m').value;

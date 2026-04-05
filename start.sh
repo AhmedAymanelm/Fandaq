@@ -4,6 +4,14 @@ set -e
 # Use the port assigned by Railway, or default to 8000
 PORT=${PORT:-8000}
 
+if [ -x "venv/bin/python" ]; then
+	ALEMBIC_CMD="venv/bin/alembic"
+	UVICORN_CMD="venv/bin/uvicorn"
+else
+	ALEMBIC_CMD="alembic"
+	UVICORN_CMD="uvicorn"
+fi
+
 echo "=== Environment Check ==="
 echo "PORT=$PORT"
 echo "DATABASE_URL is set: $([ -n "$DATABASE_URL" ] && echo 'YES' || echo 'NO')"
@@ -14,7 +22,7 @@ echo "========================="
 
 # Run migrations
 echo "Running migrations..."
-alembic upgrade head || echo "⚠️ Migration failed, continuing anyway..."
+"$ALEMBIC_CMD" upgrade head || echo "⚠️ Migration failed, continuing anyway..."
 
 echo "Starting Uvicorn on port $PORT..."
-exec uvicorn app.main:app --host 0.0.0.0 --port "$PORT" --log-level info
+exec "$UVICORN_CMD" app.main:app --host 0.0.0.0 --port "$PORT" --log-level info

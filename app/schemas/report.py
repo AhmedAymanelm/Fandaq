@@ -28,3 +28,37 @@ class FinancialSummary(BaseModel):
     occupancy_rate: float
     income_by_room_type: dict[str, float]
     expenses_by_category: dict[str, float]
+
+
+class StaffPerformanceEntry(BaseModel):
+    user_id: str
+    full_name: str
+    username: str
+    role: str
+    complaints_resolved: int
+    reservations_approved: int
+    avg_resolution_hours: float
+    avg_approval_hours: float
+    total_actions: int
+    score: int
+    rank: int
+    last_activity_at: str | None = None
+    weekly_trend: list[dict]
+
+
+class StaffPerformanceSummary(BaseModel):
+    total_staff: int
+    active_staff: int
+    total_complaints_resolved: int
+    total_reservations_approved: int
+    avg_response_hours: float
+    avg_approval_hours: float
+    rejection_rate: float
+
+
+class StaffPerformanceResponse(BaseModel):
+    period_days: int
+    period_start: str
+    period_end: str
+    summary: StaffPerformanceSummary
+    leaderboard: list[StaffPerformanceEntry]

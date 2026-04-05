@@ -218,150 +218,25 @@ async def send_automated_daily_pricing_reports():
         hotels_result = await db.execute(select(Hotel).where(Hotel.is_active == True))
         hotels = hotels_result.scalars().all()
 
-        from app.models.daily_pricing import DailyPricing
+        from app.services.report_delivery import send_combined_pricing_staff_report, fetch_pricing_rows
         for hotel in hotels:
-            stmt = select(DailyPricing).where(
-                DailyPricing.hotel_id == hotel.id,
-                DailyPricing.date == today
-            ).order_by(DailyPricing.my_price.asc())
-            
-            result = await db.execute(stmt)
-            prices = result.scalars().all()
-
+            prices = await fetch_pricing_rows(db, hotel.id, today)
             if not prices:
                 continue
 
-            msg_lines = [
-                f"📊 *تقرير أسعار المنافسين الختامي (مؤتمت)*",
-                f"🏨 الفندق: *{hotel.name}*",
-                f"📅 التاريخ: {today.strftime('%Y-%m-%d')}\n"
-            ]
-
-            for p in prices:
-                diff = float(p.my_price - p.competitor_price)
-                if diff > 0:
-                    diff_mark = f"أرخص منا بـ {diff}"
-                elif diff < 0:
-                    diff_mark = f"أغلى منا بـ {abs(diff)}"
-                else:
-                    diff_mark = "نفس السعر"
-                    
-                msg_lines.append(f"• *{p.competitor_hotel_name}*: {float(p.competitor_price)} ريال (نحن: {float(p.my_price)} ريال) ⟵ {diff_mark}")
-
-            msg_lines.append("\nتم إصدار التقرير من نظام إدارة الفنادق الذكي ✨")
-            message = "\n".join(msg_lines)
-
-            # Generate XLSX report
             try:
-                import io
-                from openpyxl import Workbook
-                from openpyxl.styles import Font, Alignment
-                from app.services.email_service import send_email_with_attachment
-
-                wb = Workbook()
-                ws = wb.active
-                ws.title = "التسعير اليومي"
-                ws.sheet_view.rightToLeft = True
-
-                headers = ["اسم الفندق المنافس", "تاريخ التسعيرة", "سعر الفندق المنافس", "سعر فندقنا", "الفرق"]
-                ws.append(headers)
-                
-                for cell in ws[1]:
-                    cell.font = Font(bold=True)
-                    cell.alignment = Alignment(horizontal="center")
-
-                for p in prices:
-                    diff = float(p.my_price - p.competitor_price)
-                    if diff > 0:
-                        diff_text = f"أغلى بـ {diff}"
-                    elif diff < 0:
-                        diff_text = f"أرخص بـ {abs(diff)}"
-                    else:
-                        diff_text = "نفس السعر"
-                        
-                    ws.append([
-                        p.competitor_hotel_name,
-                        p.date.strftime("%Y-%m-%d"),
-                        float(p.competitor_price),
-                        float(p.my_price),
-                        diff_text
-                    ])
-
-                output = io.BytesIO()
-                wb.save(output)
-                xlsx_bytes = output.getvalue()
-                output.close()
-                wb.close()
-            except Exception as e:
-                logger.error(f"❌ Failed to generate excel report for {hotel.name}: {e}")
-                xlsx_bytes = None
-
-            # Send Email if owner_email exists
-            if hotel.owner_email and xlsx_bytes:
-                try:
-                    # AI generated email body
-                    ai_body = "مرفق طيه تقرير أسعار المنافسين اليومي بصيغة نظام إدارة الفنادق الذكي.\n\n" + message
-                    try:
-                        from app.config import get_settings
-                        from openai import AsyncOpenAI
-                        settings_ai = get_settings()
-                        if settings_ai.OPENAI_API_KEY:
-                            ai_client = AsyncOpenAI(api_key=settings_ai.OPENAI_API_KEY)
-                            ai_prompt = (
-                                f"أنت مساعد افتراضي ذكي يعمل في 'نظام إدارة الفنادق الذكي'. "
-                                f"اكتب رسالة بريد إلكتروني رسمية، مرحبة، وقصيرة إلى مدير فندق '{hotel.name}'.\n\n"
-                                f"قم بالترحيب به بصفته مدير الفندق، ولخص له أسعار المنافسين اليوم بناءً على هذا التقرير النصي:\n"
-                                f"{message}\n\n"
-                                f"أخبره بلطف أن التقرير التفصيلي لمعرفة كافة الفروقات مرفق كملف إكسل مع هذا الإيميل لتسهيل قراءته. "
-                                f"تحدث بلغة عربية فصحى احترافية ولا تضف أرقاماً من كيسك. كن مباشراً ولبقاً."
-                            )
-                            ai_response = await ai_client.chat.completions.create(
-                                model=settings_ai.OPENAI_MODEL,
-                                messages=[{"role": "user", "content": ai_prompt}],
-                                max_tokens=1500,
-                            )
-                            ai_body = ai_response.choices[0].message.content
-                            # Append hidden marker for AI agent identification
-                            ai_body += f"\n\n[HID:{hotel.id}]"
-                    except Exception as ai_e:
-                        logger.error(f"❌ Failed to generate AI email body: {ai_e}")
-
-                    from app.services.email_service import send_email_with_attachment
-                    await send_email_with_attachment(
-                        to_email=hotel.owner_email,
-                        subject=f"تقرير أسعار المنافسين - {hotel.name} - {today.strftime('%Y-%m-%d')}",
-                        body_text=ai_body,
-                        attachment_name=f"daily_pricing_{today.strftime('%Y%m%d')}.xlsx",
-                        attachment_bytes=xlsx_bytes
-                    )
-                    logger.info(f"✅ Pricing report email sent to {hotel.owner_email}")
-                except ValueError as ve:
-                    logger.warning(f"⚠️ Email misconfigured, skipping email send: {ve}")
-                except Exception as e:
-                    logger.error(f"❌ Failed to send pricing report email to {hotel.owner_email}: {e}")
-
-            # Send WhatsApp / Telegram text message summary
-            try:
-                hotel_settings = hotel.settings or {}
-                tg_token = hotel.telegram_bot_token or hotel_settings.get("telegram_bot_token")
-                if tg_token and hotel.owner_whatsapp.startswith("tg_"):
-                    await whatsapp_client.send_telegram_message(bot_token=tg_token, chat_id=hotel.owner_whatsapp, message=message)
+                result = await send_combined_pricing_staff_report(
+                    db=db,
+                    hotel=hotel,
+                    report_date=today,
+                    staff_days=30,
+                )
+                if result.get("success"):
+                    logger.info("✅ Combined pricing+staff report sent for %s to %s", hotel.name, result.get("recipients", []))
                 else:
-                    from app.config import get_settings
-                    settings_app = get_settings()
-                    tg_tok = tg_token or settings_app.TELEGRAM_BOT_TOKEN
-                    if tg_tok and (hotel.owner_whatsapp.startswith("tg_") or (hotel.owner_whatsapp.isdigit() and len(hotel.owner_whatsapp) <= 10)):
-                        await whatsapp_client.send_telegram_message(bot_token=tg_tok, chat_id=hotel.owner_whatsapp, message=message)
-                    else:
-                        await whatsapp_client.send_text_message(
-                            phone_number_id=hotel.whatsapp_phone_number_id or settings_app.WHATSAPP_PHONE_NUMBER_ID,
-                            to=hotel.owner_whatsapp,
-                            message=message,
-                            api_token=hotel.whatsapp_api_token
-                        )
-                logger.info(f"✅ Pricing report text sent to owner of {hotel.name}")
+                    logger.warning("⚠️ Combined report skipped for %s: %s", hotel.name, result.get("message"))
             except Exception as e:
-                logger.error(f"❌ Failed to send pricing report text for {hotel.name}: {e}")
+                logger.error(f"❌ Failed combined report send for {hotel.name}: {e}")
 
     logger.info("📊 Pricing reports complete.")
 
@@ -390,4 +265,4 @@ def init_scheduler():
     scheduler.add_job(poll_email_replies_job, "interval", seconds=10)
     
     scheduler.start()
-    logger.info("✅ Scheduler: Scraper, Reminders, Finance, PricingReport + EmailAgent(2m)")
+    logger.info("✅ Scheduler: Scraper, Reminders, Finance, PricingReport + EmailAgent(10s)")

@@ -9,6 +9,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.complaint import Complaint, ComplaintStatus
+from app.models.user import User
 
 
 class ComplaintService:
@@ -37,6 +38,7 @@ class ComplaintService:
         hotel_id: uuid.UUID,
         complaint_id: uuid.UUID,
         status: ComplaintStatus,
+        actor_user: User | None = None,
     ) -> Complaint | None:
         """Update complaint status."""
         from sqlalchemy.orm import joinedload
@@ -53,6 +55,13 @@ class ComplaintService:
         complaint.status = status
         if status == ComplaintStatus.RESOLVED:
             complaint.resolved_at = datetime.utcnow()
+            if actor_user:
+                complaint.resolved_by_user_id = actor_user.id
+                complaint.resolved_by_name = actor_user.full_name
+        elif status in (ComplaintStatus.OPEN, ComplaintStatus.IN_PROGRESS):
+            complaint.resolved_by_user_id = None
+            complaint.resolved_by_name = None
+            complaint.resolved_at = None
 
         await db.flush()
         return complaint

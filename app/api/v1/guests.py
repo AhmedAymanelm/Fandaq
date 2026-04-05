@@ -10,12 +10,17 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from fastapi import Depends
+from app.api.deps import require_role_for_hotel
 from app.models.guest import Guest
+from app.models.user import UserRole
 from app.schemas.guest import (
     GuestResponse, GuestUpdate, GuestListResponse,
 )
 
-router = APIRouter(tags=["Guests"])
+router = APIRouter(
+    tags=["Guests"],
+    dependencies=[Depends(require_role_for_hotel(UserRole.ADMIN, UserRole.SUPERVISOR, UserRole.EMPLOYEE))],
+)
 
 
 @router.get(

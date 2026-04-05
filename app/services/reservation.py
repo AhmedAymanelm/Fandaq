@@ -3,7 +3,7 @@ Reservation service — booking workflow with owner approval.
 """
 
 import uuid
-from datetime import date
+from datetime import date, datetime
 
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -11,6 +11,7 @@ from sqlalchemy.orm import selectinload
 
 from app.models.reservation import Reservation, ReservationStatus
 from app.models.room_type import RoomType
+from app.models.user import User
 from app.services.availability import AvailabilityService
 from app.services.guest import GuestService
 from app.utils.pricing import calculate_price
@@ -141,6 +142,7 @@ class ReservationService:
         db: AsyncSession,
         hotel_id: uuid.UUID,
         reservation_id: uuid.UUID,
+        actor_user: User,
     ) -> dict:
         """Owner confirms a pending reservation."""
         reservation = await _get_reservation(db, hotel_id, reservation_id)
@@ -154,6 +156,9 @@ class ReservationService:
             }
 
         reservation.status = ReservationStatus.CONFIRMED
+        reservation.approved_by_user_id = actor_user.id
+        reservation.approved_by_name = actor_user.full_name
+        reservation.approved_at = datetime.utcnow()
         await db.flush()
 
         return {
@@ -332,6 +337,8 @@ class ReservationService:
                 "status": r.status.value if hasattr(r.status, 'value') else str(r.status),
                 "total_price": float(r.total_price) if r.total_price else 0.0,
                 "notes": r.notes,
+                "approved_by_name": r.approved_by_name,
+                "approved_at": r.approved_at.isoformat() if r.approved_at else None,
                 "created_at": r.created_at.isoformat() if r.created_at else None,
                 "updated_at": r.updated_at.isoformat() if r.updated_at else None
             })

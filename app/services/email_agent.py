@@ -4,7 +4,7 @@ from email.header import decode_header
 import logging
 import json
 import re
-from datetime import datetime
+import hashlib
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -12,7 +12,6 @@ from app.config import get_settings
 from app.database import async_session_factory
 from app.models.hotel import Hotel
 from app.models.room_type import RoomType
-from app.services.email_service import send_email_with_attachment
 
 logger = logging.getLogger(__name__)
 
@@ -44,6 +43,10 @@ class EmailAgentService:
                     if isinstance(response_part, tuple):
                         msg = email.message_from_bytes(response_part[1])
                         message_id = msg.get("Message-ID")
+                        if not message_id:
+                            # Some providers omit Message-ID; use deterministic hash as fallback dedupe key.
+                            raw_digest = hashlib.sha256(response_part[1]).hexdigest()
+                            message_id = f"fallback-{raw_digest}"
                         
                         # Use ProcessedMessage to deduplicate
                         async with async_session_factory() as db:
@@ -214,6 +217,10 @@ class EmailAgentService:
     @staticmethod
     async def send_confirmation(hotel: Hotel, intent: dict):
         """Sends a confirmation email to the owner."""
+        if not hotel.owner_email:
+            logger.info(f"ℹ️ EmailAgent: owner_email is missing for {hotel.name}; skipping confirmation email")
+            return
+
         amount = intent.get("amount", 0)
         is_relative = intent.get("is_relative", True)
         
@@ -226,7 +233,7 @@ class EmailAgentService:
             f"✅ تم تنفيذ طلبك لفندق *{hotel.name}* بنجاح!\n\n"
             f"تحديث الأسعار: {change_text}.\n"
             f"تم تحديث السعر في قاعدة البيانات وفي لوحة التحكم (Dashboard) فوراً.\n\n"
-            "شكراً لاستخدامك نظام إدارة الفنادق الذكي ✨"
+            "شكراً لاستخدامك RAHATY ✨"
         )
 
         # Send via Email
@@ -236,8 +243,6 @@ class EmailAgentService:
                 to_email=hotel.owner_email,
                 subject=f"✅ تأكيد تحديث الأسعار - {hotel.name}",
                 body_text=message,
-                attachment_name=None,
-                attachment_bytes=None
             )
             logger.info(f"✅ EmailAgent: Confirmation email sent to {hotel.owner_email}")
         except Exception as e:

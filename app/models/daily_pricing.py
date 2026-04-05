@@ -5,7 +5,7 @@ DailyPricing model — tracks daily competitor prices vs our hotel's prices.
 import uuid
 from datetime import date, datetime
 
-from sqlalchemy import Date, DateTime, ForeignKey, Numeric, String, func, UniqueConstraint
+from sqlalchemy import Date, DateTime, ForeignKey, Numeric, String, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -35,13 +35,16 @@ class DailyPricing(Base):
     competitor_price: Mapped[float] = mapped_column(
         Numeric(10, 2), nullable=False, comment="Competitor's price"
     )
+    room_type_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("room_types.id", ondelete="CASCADE"),
+        nullable=True,
+        index=True,
+        comment="Room type this pricing row belongs to"
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
 
-    # Prevent duplicates for the same hotel + competitor + date
-    __table_args__ = (
-        UniqueConstraint('hotel_id', 'competitor_hotel_name', 'date', name='uq_hotel_competitor_date'),
-    )
-
     hotel = relationship("Hotel", back_populates="daily_prices")
+    room_type = relationship("RoomType")

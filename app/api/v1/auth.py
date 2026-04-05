@@ -11,11 +11,11 @@ from app.database import get_db
 from app.schemas.user import (
     UserLogin, UserCreate, UserResponse,
     TokenResponse, UserListResponse,
-    ChangePasswordRequest, UpdateProfileRequest,
+    ChangePasswordRequest, UpdateProfileRequest, UpdateUserEmailRequest,
 )
 from app.services.auth import AuthService, create_access_token
-from app.api.deps import get_current_user
-from app.models.user import User
+from app.api.deps import get_current_user, require_role
+from app.models.user import User, UserRole
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
@@ -39,19 +39,17 @@ async def login(data: UserLogin, db: AsyncSession = Depends(get_db)):
 
 @router.get("/me", response_model=UserResponse)
 async def get_current_user_info(
-    db: AsyncSession = Depends(get_db),
-    current_user=Depends(lambda: None),  # Will be replaced by real dependency
+    current_user: User = Depends(get_current_user),
 ):
     """Get current user info."""
-    from app.api.deps import get_current_user
-    # This is handled in the deps
-    pass
+    return UserResponse.model_validate(current_user)
 
 
 @router.post("/register", response_model=UserResponse, status_code=201)
 async def register_user(
     data: UserCreate,
     db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_role(UserRole.ADMIN)),
 ):
     """Create a new user (admin only - enforced via frontend for now)."""
     from sqlalchemy import select
@@ -65,9 +63,25 @@ async def register_user(
             detail="اسم المستخدم مستخدم بالفعل",
         )
 
+    normalized_email = data.email.strip().lower() if data.email else None
+    if data.role in (UserRole.ADMIN.value, UserRole.SUPERVISOR.value) and not normalized_email:
+        raise HTTPException(
+            status_code=400,
+            detail="إيميل المدير/المشرف مطلوب لإرسال التقارير",
+        )
+
+    if normalized_email:
+        email_exists = await db.execute(select(User).where(User.email == normalized_email))
+        if email_exists.scalar_one_or_none():
+            raise HTTPException(
+                status_code=400,
+                detail="الإيميل مستخدم بالفعل",
+            )
+
     user = await AuthService.create_user(
         db,
         username=data.username,
+        email=normalized_email,
         password=data.password,
         full_name=data.full_name,
         role=data.role,
@@ -80,6 +94,7 @@ async def register_user(
 async def list_users(
     hotel_id: uuid.UUID | None = None,
     db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_role(UserRole.ADMIN)),
 ):
     """List all users."""
     users = await AuthService.list_users(db, hotel_id)
@@ -93,6 +108,7 @@ async def list_users(
 async def delete_user(
     user_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_role(UserRole.ADMIN)),
 ):
     """Delete (deactivate) a user."""
     success = await AuthService.delete_user(db, user_id)
@@ -104,12 +120,32 @@ async def delete_user(
 async def toggle_user_status(
     user_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_role(UserRole.ADMIN)),
 ):
     """Toggle user active status."""
     new_status = await AuthService.toggle_user_status(db, user_id)
     if new_status is None:
         raise HTTPException(status_code=404, detail="المستخدم غير موجود")
     return {"is_active": new_status, "message": "تم تحديث حالة المستخدم"}
+
+
+@router.patch("/users/{user_id}/email", response_model=UserResponse)
+async def update_user_email(
+    user_id: uuid.UUID,
+    data: UpdateUserEmailRequest,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_role(UserRole.ADMIN)),
+):
+    """Update user's email used for sending reports."""
+    try:
+        updated = await AuthService.update_user_email(db, user_id, data.email)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    if not updated:
+        raise HTTPException(status_code=404, detail="المستخدم غير موجود")
+
+    return UserResponse.model_validate(updated)
 
 @router.post("/change-password")
 async def change_password(

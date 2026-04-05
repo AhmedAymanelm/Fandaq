@@ -31,6 +31,7 @@ async function loadUsers() {
           <tr>
             <th>الاسم</th>
             <th>اسم المستخدم</th>
+            <th>الإيميل</th>
             <th>الدور</th>
             <th>الفندق المربوط</th>
             <th>حالة الحساب</th>
@@ -41,7 +42,7 @@ async function loadUsers() {
     `;
     
     if (users.length === 0) {
-      html += '<tr><td colspan="6" style="text-align:center">لا يوجد مستخدمون</td></tr>';
+      html += '<tr><td colspan="7" style="text-align:center">لا يوجد مستخدمون</td></tr>';
     } else {
       users.forEach(u => {
         let roleBadge = '';
@@ -59,12 +60,14 @@ async function loadUsers() {
           <tr>
             <td><strong>${u.full_name}</strong></td>
             <td><code>${u.username}</code></td>
+            <td>${u.email || '—'}</td>
             <td>${roleBadge}</td>
             <td>${hotelName}</td>
             <td>${u.is_active ? '✅ نشط' : '❌ موقوف'}</td>
             <td>
               ${u.username === 'admin' ? '' : `
                 <div style="display:flex; gap:8px;">
+                  <button class="btn btn-sm" style="background:#3b82f6" onclick="editUserEmail('${u.id}', '${(u.email || '').replace(/'/g, "&#39;")}')">✉️ إيميل</button>
                   <button class="btn btn-sm" style="background:${u.is_active ? '#f59e0b' : '#10b981'}" onclick="toggleUserStatus('${u.id}')">
                     ${u.is_active ? '⏸️ إيقاف' : '▶️ تفعيل'}
                   </button>
@@ -96,6 +99,10 @@ function showAddUserForm() {
         <input type="text" id="usr-user" class="input">
       </div>
       <div class="form-group">
+        <label>الإيميل (مطلوب للمدير/المشرف)</label>
+        <input type="email" id="usr-email" class="input" placeholder="example@domain.com">
+      </div>
+      <div class="form-group">
         <label>كلمة المرور</label>
         <input type="password" id="usr-pass" class="input" placeholder="6 أحرف على الأقل">
       </div>
@@ -125,6 +132,7 @@ function showAddUserForm() {
 async function saveNewUser() {
   const full_name = document.getElementById('usr-name').value;
   const username = document.getElementById('usr-user').value;
+  const email = document.getElementById('usr-email').value.trim();
   const password = document.getElementById('usr-pass').value;
   const role = document.getElementById('usr-role').value;
   const hotel_id = document.getElementById('usr-hotel').value;
@@ -139,10 +147,15 @@ async function saveNewUser() {
       return;
   }
 
+    if ((role === 'admin' || role === 'supervisor') && !email) {
+      showToast('إيميل المدير/المشرف مطلوب لإرسال التقارير', 'error');
+      return;
+    }
+
   try {
       await apiFetch('/auth/register', {
           method: 'POST',
-          body: JSON.stringify({ username, password, full_name, role, hotel_id })
+        body: JSON.stringify({ username, email: email || null, password, full_name, role, hotel_id })
       });
       showToast('تم إضافة المستخدم بنجاح');
       closeModal();
@@ -187,5 +200,44 @@ async function toggleUserStatus(id) {
       loadUsers();
   } catch(e) {
       showToast('خطأ أثناء تحديث الحالة', 'error');
+  }
+}
+
+function editUserEmail(userId, currentEmail) {
+  const body = `
+    <div class="form-group">
+      <label>إيميل المستخدم</label>
+      <input type="email" id="usr-edit-email" class="input" value="${currentEmail || ''}" placeholder="example@domain.com">
+      <small style="color:var(--muted)">يُستخدم هذا الإيميل في إرسال التقارير للمدير/المشرف.</small>
+    </div>
+  `;
+  const foot = `
+    <button class="btn" onclick="closeModal()">إلغاء</button>
+    <button class="btn btn-primary" onclick="saveUserEmail('${userId}')">💾 حفظ الإيميل</button>
+  `;
+  openModal('✉️ تعديل إيميل المستخدم', body, foot);
+}
+
+async function saveUserEmail(userId) {
+  const email = document.getElementById('usr-edit-email').value.trim();
+  if (!email) {
+    showToast('الرجاء إدخال الإيميل', 'error');
+    return;
+  }
+  try {
+    await apiFetch('/auth/users/' + userId + '/email', {
+      method: 'PATCH',
+      body: JSON.stringify({ email })
+    });
+    showToast('تم تحديث الإيميل بنجاح');
+    closeModal();
+    loadUsers();
+  } catch (e) {
+    let msg = 'فشل تحديث الإيميل';
+    try {
+      const err = JSON.parse(e.message);
+      if (err.detail) msg = err.detail;
+    } catch (_) {}
+    showToast(msg, 'error');
   }
 }

@@ -31,8 +31,21 @@ function roomTypeLabel(t) {
   return nameToAr(t);
 }
 function nameToAr(n) {
-  const m = {'one-bedroom':'غرفة وصالة', 'two-bedroom':'غرفتين وصالة', 'three-bedroom':'ثلاث غرف', 'standard':'قياسية', 'deluxe':'ديلوكس', 'suite':'جناح'};
-  return m[n] || n || '—';
+  const key = String(n || '').trim().toLowerCase().replace(/_/g, '-');
+  const m = {
+    'single': 'فردية',
+    'double': 'دبل',
+    'triple': 'ثلاثية',
+    'suite': 'جناح',
+    'family': 'عائلية',
+    'family-suite': 'جناح عائلي',
+    'one-bedroom': 'غرفة وصالة',
+    'two-bedroom': 'غرفتين وصالة',
+    'three-bedroom': 'ثلاث غرف وصالة',
+    'standard': 'قياسية',
+    'deluxe': 'ديلوكس',
+  };
+  return m[key] || n || '—';
 }
 
 // ══════════════════════════════════════════════

@@ -9,8 +9,10 @@ from datetime import date
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.deps import get_current_user, require_role_for_hotel
 from app.database import get_db
 from app.models.reservation import ReservationStatus
+from app.models.user import User, UserRole
 from app.schemas.reservation import (
     ReservationCreate, ReservationResponse,
     ReservationActionResponse, ReservationListResponse, ReservationDetailResponse,
@@ -19,7 +21,9 @@ from app.services.reservation import ReservationService
 from app.services.availability import AvailabilityService
 from app.schemas.room import AvailabilityResponse
 
-router = APIRouter()
+router = APIRouter(
+    dependencies=[Depends(require_role_for_hotel(UserRole.ADMIN, UserRole.SUPERVISOR, UserRole.EMPLOYEE))]
+)
 
 
 # ── Availability ─────────────────────────────────────
@@ -109,9 +113,10 @@ async def confirm_reservation(
     hotel_id: uuid.UUID,
     reservation_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """Confirm a pending reservation (owner action)."""
-    result = await ReservationService.confirm_reservation(db, hotel_id, reservation_id)
+    result = await ReservationService.confirm_reservation(db, hotel_id, reservation_id, actor_user=current_user)
     if not result["success"]:
         raise HTTPException(status_code=400, detail=result["message"])
 

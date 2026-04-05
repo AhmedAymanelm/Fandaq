@@ -591,7 +591,7 @@ async def _handle_greeting_multi_hotel(
         return {"response": welcome_message(hotels[0].name)}
 
     lines = [
-        "👋 يا هلا وسهلا في شركة X لإدارة الفنادق!",
+        "👋 يا هلا وسهلا في RAHATY لإدارة الفنادق!",
         "",
         "🏨 اختر الفندق اللي تبي تتعامل معه:",
         "",

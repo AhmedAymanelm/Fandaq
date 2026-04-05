@@ -25,6 +25,7 @@ async function loadDailyPricing() {
           <thead>
             <tr>
               <th>تاريخ التسعيرة</th>
+              <th>نوع الغرفة</th>
               <th>اسم الفندق المنافس</th>
               <th>سعر منافسنا</th>
               <th>سعر فندقنا</th>
@@ -33,7 +34,7 @@ async function loadDailyPricing() {
             </tr>
           </thead>
           <tbody id="pricing-body">
-            <tr><td colspan="6" style="text-align:center;">جاري التحميل...</td></tr>
+            <tr><td colspan="7" style="text-align:center;">جاري التحميل...</td></tr>
           </tbody>
         </table>
       </div>
@@ -51,13 +52,20 @@ async function loadDailyPricing() {
   `;
 
   try {
-    const data = await apiFetch('/hotels/' + HOTEL_ID + '/daily-pricing');
+    const [data, roomTypes] = await Promise.all([
+      apiFetch('/hotels/' + HOTEL_ID + '/daily-pricing'),
+      apiFetch('/hotels/' + HOTEL_ID + '/room-types').catch(() => []),
+    ]);
     const tbody = document.getElementById('pricing-body');
     const archiveContainer = document.getElementById('pricing-archive');
     const items = data.items || [];
+    const roomTypeMap = {};
+    (roomTypes || []).forEach(rt => {
+      roomTypeMap[rt.id] = rt.name;
+    });
 
     if (items.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;">لا يوجد تسعيرات مسجلة لليوم.</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;">لا يوجد تسعيرات مسجلة لليوم.</td></tr>';
       archiveContainer.innerHTML = '<p style="text-align:center; color:var(--text-muted)">لا يوجد أرشيف مسجل مسبقاً.</p>';
       return;
     }
@@ -87,10 +95,11 @@ async function loadDailyPricing() {
 
     // 1. Render today's items
     if (todayItems.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;">لم يتم إدخال تسعيرات اليوم. الصفحة مصفّرة.</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;">لم يتم إدخال تسعيرات اليوم. الصفحة مصفّرة.</td></tr>';
     } else {
       tbody.innerHTML = todayItems.map(p => {
         const diff = p.my_price - p.competitor_price;
+        const roomTypeName = roomTypeMap[p.room_type_id] || 'غير محدد';
         const diffLabel = diff > 0
           ? `<span class="badge" style="background:#ef4444;color:white">أغلى من المنافس بـ ${diff}</span>`
           : diff < 0
@@ -100,6 +109,7 @@ async function loadDailyPricing() {
         return `
         <tr>
           <td>${p.date}</td>
+          <td>${roomTypeName}</td>
           <td><strong>${p.competitor_hotel_name}</strong></td>
           <td style="font-weight:bold">${p.competitor_price}</td>
           <td style="font-weight:bold">${p.my_price}</td>
@@ -130,7 +140,7 @@ async function loadDailyPricing() {
             </div>
             <div style="display:flex; gap:8px">
               <button class="btn btn-sm" style="background:#10b981; color:white; border:none" onclick="downloadPricingExcel('${dt}')">📥 شيت إكسل</button>
-              <button class="btn btn-sm btn-primary" onclick="sendPricingReport('${dt}')">📤 إرسال للمالك</button>
+              <button class="btn btn-sm btn-primary" onclick="sendPricingReport('${dt}')">📤 إرسال للمدير/المشرف</button>
             </div>
           </div>
         `;
@@ -142,8 +152,25 @@ async function loadDailyPricing() {
   }
 }
 
-function showAddPricingModal() {
+async function showAddPricingModal() {
+  const roomTypes = await apiFetch(`/hotels/${HOTEL_ID}/room-types`).catch(() => []);
+  if (!roomTypes.length) {
+    showToast('أضف نوع غرفة واحد على الأقل من صفحة إعداد الغرف أولاً', 'error');
+    return;
+  }
+
+  const roomTypeOptions = roomTypes
+    .map(rt => `<option value="${rt.id}">${rt.name}</option>`)
+    .join('');
+
   const body = `
+    <div class="form-group">
+      <label>نوع الغرفة</label>
+      <select id="dp-room-type-id" class="input">
+        <option value="">اختر نوع الغرفة...</option>
+        ${roomTypeOptions}
+      </select>
+    </div>
     <div class="form-group">
       <label>اسم الفندق المنافس</label>
       <input type="text" id="dp-comp-name" class="input" placeholder="اسم الفندق...">
@@ -167,11 +194,12 @@ function showAddPricingModal() {
 }
 
 async function savePricing() {
+  const roomTypeId = document.getElementById('dp-room-type-id').value;
   const cName = document.getElementById('dp-comp-name').value;
   const cPrice = document.getElementById('dp-comp-price').value;
   const mPrice = document.getElementById('dp-my-price').value;
 
-  if (!cName || !cPrice || !mPrice) {
+  if (!roomTypeId || !cName || !cPrice || !mPrice) {
     showToast('الرجاء إدخال جميع البيانات', 'error');
     return;
   }
@@ -180,6 +208,7 @@ async function savePricing() {
     await apiFetch('/hotels/' + HOTEL_ID + '/daily-pricing', {
       method: 'POST',
       body: JSON.stringify({
+        room_type_id: roomTypeId,
         competitor_hotel_name: cName,
         competitor_price: parseFloat(cPrice),
         my_price: parseFloat(mPrice)
@@ -236,13 +265,6 @@ function downloadPricingExcel(dateStr) {
 }
 
 async function sendPricingReport(dateStr) {
-  // Find hotel owner number
-  const h = typeof GLOBAL_DATA !== 'undefined' ? (GLOBAL_DATA.all_hotels_list || GLOBAL_DATA.all_hotels || []).find(x => x.id === HOTEL_ID) : null;
-  if (!h || !h.owner_whatsapp) {
-    showToast('لم يتم العثور على رقم واتساب للمالك في إعدادات الفندق', 'error');
-    return;
-  }
-
   // Get items for this date from the API (since local variable won't be in scope from load function)
   try {
     const data = await apiFetch(`/hotels/${HOTEL_ID}/daily-pricing?from_date=${dateStr}&to_date=${dateStr}`);
@@ -253,37 +275,12 @@ async function sendPricingReport(dateStr) {
       return;
     }
 
-    const msgLines = [
-      `📊 *تقرير أسعار المنافسين اليومي*`,
-      `🏨 الفندق: *${h.name}*`,
-      `📅 التاريخ: ${dateStr}\n`
-    ];
-
-    items.forEach(p => {
-      const diff = p.my_price - p.competitor_price;
-      let diffMark = "نفس السعر";
-      if (diff > 0) diffMark = `أرخص منا بـ ${diff}`;
-      else if (diff < 0) diffMark = `أغلى منا بـ ${Math.abs(diff)}`;
-
-      msgLines.push(`• *${p.competitor_hotel_name}*: ${p.competitor_price} ريال (نحن: ${p.my_price} ريال) ⟵ ${diffMark}`);
-    });
-
-    msgLines.push(`\nتم إصدار التقرير من نظام إدارة الفنادق الذكي ✨`);
-
-    const textMsg = encodeURIComponent(msgLines.join('\n'));
-    // clean phone number (remove +, spaces, leading zeros logic if needed, usually just raw)
-    let phone = h.owner_whatsapp.replace(/\D/g, '');
-    if (phone.startsWith('00')) phone = phone.substring(2);
-
-    // 1. Call Backend API to trigger native AI Email generation and automated routing
-    await apiFetch(`/hotels/${HOTEL_ID}/daily-pricing/send-report?date=${dateStr}`, { method: 'POST' }).catch(() => null);
-
-    // 2. Open WhatsApp fallback deep link for the user
-    showToast('جاري تحويلك للواتساب وإرسال الإيميل إن وجد...');
-    window.open(`https://wa.me/${phone}?text=${textMsg}`, '_blank');
+    const resp = await apiFetch(`/hotels/${HOTEL_ID}/daily-pricing/send-report?date=${dateStr}`, { method: 'POST' });
+    const count = Array.isArray(resp.recipients) ? resp.recipients.length : 0;
+    showToast(`تم إرسال التقرير الموحد بنجاح (${count}) مستلمين`);
 
   } catch (e) {
-    showToast('حدث خطأ أثناء تحضير التقرير', 'error');
+    showToast('فشل إرسال التقرير الموحد', 'error');
   }
 }
 

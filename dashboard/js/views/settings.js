@@ -163,7 +163,7 @@ async function loadSettings() {
           <div class="settings-info-grid">
             <div class="settings-info-item">
               <span class="settings-label">اسم النظام</span>
-              <span class="settings-value">X — نظام إدارة الفنادق</span>
+              <span class="settings-value">RAHATY — نظام إدارة الفنادق</span>
             </div>
             <div class="settings-info-item">
               <span class="settings-label">الإصدار</span>

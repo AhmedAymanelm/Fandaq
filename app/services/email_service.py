@@ -1,8 +1,15 @@
 import aiosmtplib
 from email.message import EmailMessage
+from typing import Optional
 from app.config import get_settings
 
-async def send_email_with_attachment(to_email: str, subject: str, body_text: str, attachment_name: str, attachment_bytes: bytes):
+async def send_email_with_attachment(
+    to_email: str,
+    subject: str,
+    body_text: str,
+    attachment_name: Optional[str] = None,
+    attachment_bytes: Optional[bytes] = None,
+):
     """
     Sends an email with an Excel (.xlsx) attachment.
     """
@@ -19,20 +26,21 @@ async def send_email_with_attachment(to_email: str, subject: str, body_text: str
 
     msg = EmailMessage()
     # Using a professional display name helps avoid Spam filters
-    display_name = settings.APP_NAME or "نظام إدارة الفنادق الذكي"
+    display_name = settings.APP_NAME or "RAHATY"
     msg['From'] = f'"{display_name}" <{sender_email}>'
     msg['To'] = to_email
     msg['Subject'] = subject
 
     msg.set_content(body_text)
 
-    # Attach the file
-    msg.add_attachment(
-        attachment_bytes,
-        maintype='application',
-        subtype='vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-        filename=attachment_name
-    )
+    # Attach a file only when both name and bytes are provided.
+    if attachment_name and attachment_bytes is not None:
+        msg.add_attachment(
+            attachment_bytes,
+            maintype='application',
+            subtype='vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            filename=attachment_name
+        )
 
     # Send email
     try:

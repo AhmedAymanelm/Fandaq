@@ -4,6 +4,7 @@
 let resFilter = 'all';
 async function loadReservations() {
   if (!HOTEL_ID) return;
+  const canSeeActor = CURRENT_USER && ['admin', 'supervisor'].includes(CURRENT_USER.role);
   const url = resFilter === 'all' ? `/hotels/${HOTEL_ID}/reservations?limit=100`
     : `/hotels/${HOTEL_ID}/reservations?status=${resFilter}&limit=100`;
   const data = await apiFetch(url).catch(() => ({ reservations: [] }));
@@ -47,7 +48,7 @@ async function loadReservations() {
           <button class="btn btn-primary btn-sm" onclick="showAddReservationModal()">➕ إضافة حجز يدوي</button>
         </div>
       </div>
-      <table><thead><tr><th>رقم الحجز</th><th>تاريخ الإنشاء</th><th>الضيف</th><th>الغرفة</th><th>الدخول</th><th>الخروج</th><th>السعر</th><th>الحالة</th><th>إجراء</th></tr></thead>
+      <table><thead><tr><th>رقم الحجز</th><th>تاريخ الإنشاء</th><th>الضيف</th><th>الغرفة</th><th>الدخول</th><th>الخروج</th><th>السعر</th><th>الحالة</th>${canSeeActor ? '<th>تمت بواسطة</th>' : ''}<th>إجراء</th></tr></thead>
       <tbody id="res-tbody">${renderResMarkup(all)}</tbody></table></div>`;
 }
 
@@ -72,7 +73,8 @@ function filterReservations(q) {
 }
 
 function renderResMarkup(all) {
-  if (!all.length) return '<tr><td colspan="9"><div class="empty-state"><div class="emoji">📭</div>لا توجد حجوزات مطابقة</div></td></tr>';
+  const canSeeActor = CURRENT_USER && ['admin', 'supervisor'].includes(CURRENT_USER.role);
+  if (!all.length) return `<tr><td colspan="${canSeeActor ? '10' : '9'}"><div class="empty-state"><div class="emoji">📭</div>لا توجد حجوزات مطابقة</div></td></tr>`;
   return all.map(r => `
     <tr><td style="font-family:monospace;color:var(--accent)">#${String(r.id).slice(0, 6).toUpperCase()}</td>
     <td>${fmtDate(r.created_at)}</td>
@@ -84,6 +86,7 @@ function renderResMarkup(all) {
     </td>
     <td><span class="badge" style="background:var(--tertiary);color:var(--text)">غرفة ${r.room_number || 'غير محدد'}</span></td><td>${fmtDate(r.check_in)}</td><td>${fmtDate(r.check_out)}</td>
     <td>${fmtMoney(r.total_price)}</td><td>${badgeHtml(r.status)}</td>
+    ${canSeeActor ? `<td>${r.approved_by_name ? `${r.approved_by_name}<br><span style="font-size:11px;color:var(--muted)">${fmtDate(r.approved_at)}</span>` : '—'}</td>` : ''}
     <td>${r.status === 'pending' ? `<button class="btn btn-success btn-sm" onclick="confirmRes('${r.id}')">✅</button>
       <button class="btn btn-danger btn-sm" onclick="rejectRes('${r.id}')">❌</button>` :
       r.status === 'confirmed' ? `<button class="btn btn-primary btn-sm" onclick="checkInRes('${r.id}')">تسجيل دخول</button>

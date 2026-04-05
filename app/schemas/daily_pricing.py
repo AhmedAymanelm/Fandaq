@@ -10,17 +10,20 @@ class DailyPricingBase(BaseModel):
     competitor_price: float = Field(..., ge=0)
 
 class DailyPricingCreate(DailyPricingBase):
+    room_type_id: uuid.UUID
     date: Optional[pydate] = None  # Optional, default to today in DB if not provided
 
 class DailyPricingUpdate(BaseModel):
     competitor_hotel_name: Optional[str] = Field(None, max_length=255)
     my_price: Optional[float] = Field(None, ge=0)
     competitor_price: Optional[float] = Field(None, ge=0)
+    room_type_id: Optional[uuid.UUID] = None
     date: Optional[pydate] = None
 
 class DailyPricingResponse(DailyPricingBase):
     id: uuid.UUID
     hotel_id: uuid.UUID
+    room_type_id: Optional[uuid.UUID] = None
     date: pydate
     created_at: datetime
 
