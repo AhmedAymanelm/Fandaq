@@ -37,6 +37,19 @@ class Complaint(Base):
     status: Mapped[ComplaintStatus] = mapped_column(
         Enum(ComplaintStatus), default=ComplaintStatus.OPEN, nullable=False
     )
+    acknowledged_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True,
+        comment="Time of first response/acknowledgement"
+    )
+    first_response_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True, index=True,
+        comment="User who first acknowledged this complaint"
+    )
+    first_response_by_name: Mapped[str | None] = mapped_column(
+        String(255), nullable=True,
+        comment="Snapshot name of first responder"
+    )
     resolved_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"),
         nullable=True, index=True,

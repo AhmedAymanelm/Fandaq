@@ -710,6 +710,16 @@ async def _handle_submit_review(
     # Generate AI suggested reply
     from app.ai.extractor import generate_review_reply
     suggested_reply = await generate_review_reply(rating, comment, category)
+    now = datetime.utcnow()
+
+    if rating >= 4:
+        sentiment = "positive"
+    elif rating == 3:
+        sentiment = "neutral"
+    else:
+        sentiment = "negative"
+
+    reply_status = "auto_sent" if sentiment == "positive" else "pending_approval"
 
     # Save review
     review = Review(
@@ -720,6 +730,12 @@ async def _handle_submit_review(
         comment=comment if comment else None,
         category=category,
         ai_reply_suggestion=suggested_reply,
+        sentiment=sentiment,
+        reply_status=reply_status,
+        final_reply_text=suggested_reply if sentiment == "positive" else None,
+        reply_generated_at=now if suggested_reply else None,
+        reply_sent_at=now if sentiment == "positive" else None,
+        reply_sent_channel="auto_policy" if sentiment == "positive" else None,
     )
     db.add(review)
     await db.flush()

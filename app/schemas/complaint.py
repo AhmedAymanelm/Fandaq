@@ -27,6 +27,8 @@ class ComplaintResponse(BaseModel):
     room_number: str | None = None
     text: str
     status: ComplaintStatus
+    acknowledged_at: datetime | None = None
+    first_response_by_name: str | None = None
     resolved_by_name: str | None = None
     created_at: datetime
     resolved_at: datetime | None

@@ -52,16 +52,34 @@ class ComplaintService:
         if not complaint:
             return None
 
+        previous_status = complaint.status
         complaint.status = status
+
+        if status == ComplaintStatus.IN_PROGRESS and previous_status == ComplaintStatus.OPEN:
+            if not complaint.acknowledged_at:
+                complaint.acknowledged_at = datetime.utcnow()
+            if actor_user and not complaint.first_response_by_user_id:
+                complaint.first_response_by_user_id = actor_user.id
+                complaint.first_response_by_name = actor_user.full_name
+
         if status == ComplaintStatus.RESOLVED:
+            if not complaint.acknowledged_at:
+                complaint.acknowledged_at = datetime.utcnow()
+            if actor_user and not complaint.first_response_by_user_id:
+                complaint.first_response_by_user_id = actor_user.id
+                complaint.first_response_by_name = actor_user.full_name
             complaint.resolved_at = datetime.utcnow()
             if actor_user:
                 complaint.resolved_by_user_id = actor_user.id
                 complaint.resolved_by_name = actor_user.full_name
         elif status in (ComplaintStatus.OPEN, ComplaintStatus.IN_PROGRESS):
-            complaint.resolved_by_user_id = None
-            complaint.resolved_by_name = None
-            complaint.resolved_at = None
+            if status == ComplaintStatus.OPEN:
+                complaint.acknowledged_at = None
+                complaint.first_response_by_user_id = None
+                complaint.first_response_by_name = None
+                complaint.resolved_by_user_id = None
+                complaint.resolved_by_name = None
+                complaint.resolved_at = None
 
         await db.flush()
         return complaint

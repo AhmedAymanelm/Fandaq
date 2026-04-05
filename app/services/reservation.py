@@ -91,9 +91,20 @@ class ReservationService:
 
         if not room_type:
             room_type = candidates[0]
+            alternatives = await AvailabilityService.suggest_alternative_room_types(
+                db=db,
+                hotel_id=hotel_id,
+                check_in=check_in,
+                check_out=check_out,
+            )
             return {
                 "success": False,
-                "message": f"عذراً، الغرف من فئة '{room_type.name}' غير متاحة في الفتره دي، لكنها هتتوفر قريباً إن شاء الله.",
+                "error_code": "OVERBOOKING_RISK",
+                "message": f"عذراً، الغرف من فئة '{room_type.name}' غير متاحة في هذه الفترة.",
+                "requested_room_type": room_type.name,
+                "check_in": str(check_in),
+                "check_out": str(check_out),
+                "alternatives": alternatives,
             }
 
         # 3. Find or create guest

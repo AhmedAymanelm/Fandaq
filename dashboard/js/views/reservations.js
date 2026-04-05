@@ -11,10 +11,27 @@ async function loadReservations() {
 
   const pending = GLOBAL_DATA.pending_res || [];
   const all = data.reservations || [];
+  let overbookingAlertHtml = '';
+  if (canSeeActor) {
+    const overStatus = await apiFetch(`/hotels/${HOTEL_ID}/overbooking/status?lookahead_days=30`)
+      .catch(() => ({ safe: true, conflict_count: 0, conflicts: [] }));
+    if (!overStatus.safe && overStatus.conflict_count > 0) {
+      const first = overStatus.conflicts[0];
+      overbookingAlertHtml = `
+        <div class="table-card" style="margin-bottom:14px;border-color:rgba(239,68,68,.45)">
+          <div style="padding:12px 14px;background:rgba(239,68,68,.08);color:#fecaca;font-size:13px;line-height:1.6">
+            <strong>تنبيه تداخل حجوزات:</strong> يوجد ${overStatus.conflict_count} حالة محتملة خلال 30 يوم.
+            ${first ? `<br>أقرب حالة: ${first.room_type} يوم ${fmtDate(first.peak_date)} (زيادة ${first.overbooked_by}).` : ''}
+          </div>
+        </div>
+      `;
+    }
+  }
   GLOBAL_DATA.all_res = all;
   const statusFilters = ['all', 'pending', 'confirmed', 'checked_in', 'checked_out', 'cancelled', 'rejected'];
 
   document.getElementById('content').innerHTML = `
+    ${overbookingAlertHtml}
     ${pending.length > 0 && resFilter !== 'confirmed' ? `
     <div class="pending-section">
       <div class="section-title">⏳ حجوزات تنتظر موافقتك (${pending.length})</div>
@@ -256,6 +273,21 @@ async function addReservation(data) {
     await apiFetch(`/hotels/${HOTEL_ID}/reservations`, { method: 'POST', body: JSON.stringify(data) });
     showToast('تم إنشاء الحجز اليدوي بنجاح');
     loadReservations(); loadBadges();
-  } catch (e) { showToast('فشل إنشاء الحجز', 'error'); }
+  } catch (e) {
+    try {
+      const err = JSON.parse(e.message);
+      const detail = err.detail || {};
+      if (detail.error_code === 'OVERBOOKING_RISK') {
+        const alternatives = (detail.alternatives || [])
+          .slice(0, 3)
+          .map(a => `${nameToAr(a.room_type)} (${a.available_units} متاح)`)
+          .join('، ');
+        const altText = alternatives ? ` بدائل متاحة: ${alternatives}` : '';
+        showToast((detail.message || 'لا توجد سعة كافية') + altText, 'error');
+        return;
+      }
+    } catch (_) {}
+    showToast('فشل إنشاء الحجز', 'error');
+  }
 }
 

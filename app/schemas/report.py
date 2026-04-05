@@ -37,9 +37,19 @@ class StaffPerformanceEntry(BaseModel):
     role: str
     complaints_resolved: int
     reservations_approved: int
+    requests_completed: int
     avg_resolution_hours: float
     avg_approval_hours: float
+    avg_request_completion_hours: float
     total_actions: int
+    first_response_sla_total: int
+    first_response_sla_met: int
+    first_response_sla_breached: int
+    first_response_sla_rate: float
+    resolution_sla_total: int
+    resolution_sla_met: int
+    resolution_sla_breached: int
+    resolution_sla_rate: float
     score: int
     rank: int
     last_activity_at: str | None = None
@@ -51,9 +61,20 @@ class StaffPerformanceSummary(BaseModel):
     active_staff: int
     total_complaints_resolved: int
     total_reservations_approved: int
+    total_requests_completed: int
     avg_response_hours: float
     avg_approval_hours: float
     rejection_rate: float
+    sla_first_response_target_minutes: int
+    sla_resolution_target_hours: int
+    first_response_sla_total: int
+    first_response_sla_met: int
+    first_response_sla_breached: int
+    first_response_sla_rate: float
+    resolution_sla_total: int
+    resolution_sla_met: int
+    resolution_sla_breached: int
+    resolution_sla_rate: float
 
 
 class StaffPerformanceResponse(BaseModel):

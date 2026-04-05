@@ -225,13 +225,6 @@ async def send_combined_pricing_staff_report(
         }
 
     prices_today = await fetch_pricing_rows(db, hotel.id, report_date)
-    if not prices_today:
-        return {
-            "success": False,
-            "message": "No pricing found for report date",
-            "recipients": recipients,
-        }
-
     prices_yesterday = await fetch_pricing_rows(db, hotel.id, report_date - timedelta(days=1))
     performance = await ReportService.generate_staff_performance(db, hotel.id, period_days=staff_days)
 

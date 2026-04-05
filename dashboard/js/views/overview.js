@@ -35,6 +35,32 @@ async function loadOverview() {
 
   const COLORS = ['#7c3aed', '#2563eb', '#10b981', '#f59e0b', '#ef4444', '#06b6d4'];
 
+  function renderFallbackList(container, labels, values, color) {
+    if (!container) return;
+    if (!labels.length) {
+      container.innerHTML = '<div class="empty-state"><div class="emoji">📊</div>لا توجد بيانات</div>';
+      return;
+    }
+    const maxVal = Math.max(...values.map(v => Number(v) || 0), 1);
+    container.innerHTML = `
+      <div style="padding:10px 8px;display:grid;gap:10px">
+        ${labels.map((label, i) => {
+          const raw = Number(values[i]) || 0;
+          const pct = Math.max(4, Math.round((raw / maxVal) * 100));
+          return `
+            <div>
+              <div style="display:flex;justify-content:space-between;gap:8px;font-size:12px;color:var(--text-muted);margin-bottom:5px">
+                <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${label || '—'}</span>
+                <strong style="color:var(--text)">${fmtMoney(raw)}</strong>
+              </div>
+              <div style="height:8px;background:rgba(148,163,184,.15);border-radius:999px;overflow:hidden">
+                <div style="height:100%;width:${pct}%;background:${color};border-radius:999px"></div>
+              </div>
+            </div>`;
+        }).join('')}
+      </div>`;
+  }
+
   // Background: monthly report (KPIs + charts)
   apiFetch(`/hotels/${HOTEL_ID}/reports/monthly`).then(res => {
     const md = res?.data || {};
@@ -44,37 +70,52 @@ async function loadOverview() {
     if (ko) ko.innerHTML = `<div class="kpi-icon">📊</div><div class="kpi-label">نسبة الإشغال</div><div class="kpi-value">${(md.occupancy_rate || 0).toFixed(1)}%</div><div class="kpi-sub">هذا الشهر</div>`;
 
     const ibt = md.income_by_room_type || {};
-    const tL = Object.keys(ibt).map(roomTypeLabel), tV = Object.values(ibt);
+    const tL = Object.keys(ibt).map(roomTypeLabel);
+    const tV = Object.values(ibt).map(v => Number(v) || 0);
     const w1 = document.getElementById('wrap-income');
     if (w1) w1.querySelector('.loading-text')?.remove();
     if (tL.length > 0) {
-      charts.incomeType = new Chart(document.getElementById('chart-income-type'), {
-        type: 'doughnut', data: { labels: tL, datasets: [{ data: tV, backgroundColor: COLORS, borderColor: 'transparent', borderWidth: 0, hoverOffset: 6 }] },
-        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { color: '#8b949e', font: { family: 'IBM Plex Sans Arabic', size: 11 }, padding: 12 } } } }
-      });
+      try {
+        if (typeof Chart === 'undefined') throw new Error('Chart.js not loaded');
+        charts.incomeType = new Chart(document.getElementById('chart-income-type'), {
+          type: 'doughnut', data: { labels: tL, datasets: [{ data: tV, backgroundColor: COLORS, borderColor: 'transparent', borderWidth: 0, hoverOffset: 6 }] },
+          options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { color: '#8b949e', font: { family: 'IBM Plex Sans Arabic', size: 11 }, padding: 12 } } } }
+        });
+      } catch (e) {
+        renderFallbackList(w1, tL, tV, 'linear-gradient(90deg,#2563eb,#7c3aed)');
+      }
     } else { if (w1) w1.innerHTML = '<div class="empty-state"><div class="emoji">📊</div>لا توجد بيانات</div>'; }
 
     const ebc = md.expenses_by_category || {};
-    const cL = Object.keys(ebc), cV = Object.values(ebc);
+    const cL = Object.keys(ebc);
+    const cV = Object.values(ebc).map(v => Number(v) || 0);
     const w2 = document.getElementById('wrap-exp');
     if (w2) w2.querySelector('.loading-text')?.remove();
     if (cL.length > 0) {
-      charts.expenses = new Chart(document.getElementById('chart-expenses'), {
-        type: 'bar', data: { labels: cL, datasets: [{ data: cV, backgroundColor: 'rgba(239,68,68,.6)', borderColor: 'rgba(239,68,68,1)', borderWidth: 1, borderRadius: 6 }] },
-        options: {
-          responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } },
-          scales: {
-            x: { ticks: { color: '#8b949e', font: { family: 'IBM Plex Sans Arabic' } }, grid: { color: 'rgba(48,54,61,.5)' } },
-            y: { ticks: { color: '#8b949e', font: { family: 'IBM Plex Sans Arabic' } }, grid: { color: 'rgba(48,54,61,.5)' } }
+      try {
+        if (typeof Chart === 'undefined') throw new Error('Chart.js not loaded');
+        charts.expenses = new Chart(document.getElementById('chart-expenses'), {
+          type: 'bar', data: { labels: cL, datasets: [{ data: cV, backgroundColor: 'rgba(239,68,68,.6)', borderColor: 'rgba(239,68,68,1)', borderWidth: 1, borderRadius: 6 }] },
+          options: {
+            responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } },
+            scales: {
+              x: { ticks: { color: '#8b949e', font: { family: 'IBM Plex Sans Arabic' } }, grid: { color: 'rgba(48,54,61,.5)' } },
+              y: { ticks: { color: '#8b949e', font: { family: 'IBM Plex Sans Arabic' } }, grid: { color: 'rgba(48,54,61,.5)' } }
+            }
           }
-        }
-      });
+        });
+      } catch (e) {
+        renderFallbackList(w2, cL, cV, 'linear-gradient(90deg,#ef4444,#f59e0b)');
+      }
     } else { if (w2) w2.innerHTML = '<div class="empty-state"><div class="emoji">💸</div>لا توجد مصروفات</div>'; }
-  }).catch(() => {
+  }).catch((err) => {
+    const errText = String(err?.message || err || '');
+    const permissionDenied = errText.includes('Not enough permissions') || errText.includes('403');
+    const msg = permissionDenied ? 'غير متاح حسب الصلاحية' : 'فشل تحميل التقرير';
     const w1 = document.getElementById('wrap-income');
-    if (w1) w1.innerHTML = '<div class="empty-state">فشل تحميل التقرير</div>';
+    if (w1) w1.innerHTML = `<div class="empty-state">${msg}</div>`;
     const w2 = document.getElementById('wrap-exp');
-    if (w2) w2.innerHTML = '<div class="empty-state">فشل تحميل التقرير</div>';
+    if (w2) w2.innerHTML = `<div class="empty-state">${msg}</div>`;
   });
 
   // Background: recent reservations

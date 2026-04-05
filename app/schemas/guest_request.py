@@ -26,8 +26,11 @@ class GuestRequestResponse(BaseModel):
     request_type: str
     details: str | None
     status: RequestStatus
+    acknowledged_at: datetime | None = None
+    first_response_by_name: str | None = None
     created_at: datetime
     completed_at: datetime | None
+    completed_by_name: str | None = None
 
     model_config = {"from_attributes": True}
 

@@ -75,9 +75,26 @@ async def create_reservation(
     )
 
     if not result["success"]:
-        raise HTTPException(status_code=400, detail=result["message"])
+        raise HTTPException(status_code=400, detail=result)
 
     return result
+
+
+@router.get(
+    "/hotels/{hotel_id}/overbooking/status",
+    dependencies=[Depends(require_role_for_hotel(UserRole.ADMIN, UserRole.SUPERVISOR))],
+)
+async def overbooking_status(
+    hotel_id: uuid.UUID,
+    lookahead_days: int = Query(30, ge=1, le=120),
+    db: AsyncSession = Depends(get_db),
+):
+    """Return potential overbooking conflicts for upcoming days."""
+    return await AvailabilityService.detect_overbooking_conflicts(
+        db=db,
+        hotel_id=hotel_id,
+        lookahead_days=lookahead_days,
+    )
 
 
 @router.get("/hotels/{hotel_id}/reservations")

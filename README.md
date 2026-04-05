@@ -1,65 +1,120 @@
-# AI Hotel Concierge & SaaS Dashboard 🏨✨
+# RAHATY Hotels Group Platform
 
-A production-ready SaaS platform that manages **multiple hotels**, automates guest bookings via **WhatsApp & Telegram**, and provides a powerful **real-time Dashboard** for hotel administrators. Powered by OpenAI's GPT-4.
+نظام إدارة وتشغيل فنادق متعدد الفروع يجمع بين إدارة العمليات اليومية، المتابعة المالية، وخدمات الضيوف عبر القنوات الرقمية في منصة واحدة.
 
-## 🌟 Key Features
+هذا المشروع مبني كنظام SaaS متعدد المستأجرين (Multi-Tenant) لتمكين كل فندق من إدارة بياناته وعملياته بشكل مستقل، مع لوحة تحكم مركزية للإدارة والفرق التشغيلية.
 
-- **Automated AI Reservations:** Guests can browse rooms, check availability, and book stays natively through WhatsApp and Telegram.
-- **Smart Support & Complaints:** Real-time routing of guest issues to staff, with automatic AI apologies when issues are resolved.
-- **Multi-Tenant SaaS:** Manage multiple hotels from a single instance, each with its own WhatsApp/Telegram bots and settings.
-- **Real-Time Admin Dashboard:** A sleek, dark-themed responsive dashboard to manage rooms, approve reservations, track expenses, and view financial reports.
-- **Background Automation:** Automatic "Check-in" welcome messages and post-stay "Rate Your Stay" follow-ups.
+## Project Overview
 
-## 🏗 Architecture
+RAHATY is a production-focused hospitality platform designed for:
 
-```mermaid
-graph LR
-    Guest((Guest)) <-->|WhatsApp / Telegram| Webhook[Platform Webhook]
-    Webhook --> AI{AI Intent Engine}
-    AI -->|Extracts Intent & Context| Dispatcher[Service Dispatcher]
-    Dispatcher --> DB[(PostgreSQL)]
-    DB --> Dashboard[Admin Dashboard]
-    Dashboard -.->|Approve / Check-in| Dispatcher
+- Hotel operations and reservations lifecycle management
+- Staff workflow management with role-based access control
+- Daily pricing intelligence and competitor comparison
+- Performance analytics for staff supervision
+- Email-based operational reporting with Excel exports
+
+The platform is optimized for real-world usage where reliability, traceability, and clear reporting are required for day-to-day hotel execution.
+
+## Core Capabilities
+
+- Multi-hotel architecture with per-hotel data isolation
+- Reservation flow: pending, approval, check-in, check-out, cancellation, rejection
+- Complaint and service-request workflow with ownership tracking
+- Daily pricing module with competitor benchmarking and report exports
+- Unified reporting delivery (pricing + staff performance) via email
+- Role model for admin, supervisor, and employee with scoped permissions
+- Dashboard modules for rooms, guests, reviews, expenses, reports, and users
+
+## Technology Stack
+
+- Backend: FastAPI, SQLAlchemy Async, Alembic
+- Database: PostgreSQL
+- Frontend: HTML, CSS, Vanilla JavaScript (single dashboard application)
+- Scheduling: APScheduler
+- Reporting: OpenPyXL (Excel generation)
+- Email delivery: aiosmtplib
+
+## High-Level Structure
+
+```text
+app/
+   api/           HTTP endpoints and dependencies
+   models/        SQLAlchemy entities
+   schemas/       Pydantic contracts
+   services/      Business logic and background jobs
+   main.py        FastAPI entrypoint
+
+alembic/
+   versions/      Database migration history
+
+dashboard/
+   index.html     Main dashboard shell
+   css/           Styling
+   js/            Frontend views and API client
+
+tests/
+   test_smoke_release.py   Release smoke checks
 ```
 
-## 🛠 Tech Stack
+## Local Setup
 
-- **Backend:** FastAPI (Python), SQLAlchemy 2.0 (Async)
-- **Database:** PostgreSQL (with Alembic for migrations)
-- **AI Engine:** OpenAI GPT-4
-- **Messaging:** Meta WhatsApp Cloud API & Telegram Bot API
-- **Frontend:** Vanilla JS, HTML, CSS (Single Page App)
+1. Create and activate virtual environment.
+2. Install dependencies.
+3. Configure environment variables.
+4. Apply migrations.
+5. Run the application.
 
-## 🚀 Quick Start
+```bash
+python -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+cp .env.example .env
+venv/bin/alembic upgrade head
+venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000 --log-level info
+```
 
-1. **Environment Setup**
-   ```bash
-   cp .env.example .env
-   # Edit .env with your OpenAI API Key and Database URL
-   ```
+Dashboard URL:
 
-2. **Run Migrations**
-   ```bash
-   alembic upgrade head
-   ```
+```text
+http://localhost:8000/dashboard/
+```
 
-3. **Start the Server**
-   ```bash
-   uvicorn app.main:app --reload
-   ```
+## Environment Notes
 
-4. **Access the Dashboard**
-   Open your browser and navigate to: `http://localhost:8000/dashboard/`
+Minimum required configuration for normal runtime:
 
-## 🔗 Webhook Configuration
+- DATABASE_URL
+- SECRET_KEY
+- SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASSWORD
 
-To connect the AI bot to the messaging platforms, use these endpoints:
+Optional integrations:
 
-- **WhatsApp (Meta):** `https://your-domain.com/webhook`
-- **Telegram (BotFather):** `https://your-domain.com/telegram-webhook`
+- OPENAI_API_KEY
+- WHATSAPP_API_TOKEN and related WhatsApp settings
+- TELEGRAM_BOT_TOKEN and related Telegram settings
 
-*(Note: For local testing, use a tunneling service like **ngrok** to expose your server).*
+## Release Smoke Tests
 
-## 📖 License
+The repository includes smoke tests to validate critical release paths:
 
-Private — All rights reserved.
+- Migration head vs current database revision
+- Authentication login path
+- Report send endpoint behavior
+
+Run smoke tests:
+
+```bash
+venv/bin/python -m pytest -q tests/test_smoke_release.py
+```
+
+## Database and Migration Discipline
+
+- Any schema update must be accompanied by a new Alembic migration.
+- Deployment should always run `venv/bin/alembic upgrade head` before application startup.
+- Automated combined reports are sent daily at 12:00 AM (midnight), covering the previous day.
+- Current project revision chain includes operational migrations for pricing, actor tracking, and user email support.
+
+## License
+
+Private project. All rights reserved.

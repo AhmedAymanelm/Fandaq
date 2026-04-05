@@ -16,7 +16,15 @@ async function loadStaffPerformance() {
     active_staff: 0,
     total_complaints_resolved: 0,
     total_reservations_approved: 0,
+    total_requests_completed: 0,
     avg_response_hours: 0,
+    avg_approval_hours: 0,
+    first_response_sla_rate: 0,
+    resolution_sla_rate: 0,
+    first_response_sla_breached: 0,
+    resolution_sla_breached: 0,
+    sla_first_response_target_minutes: 15,
+    sla_resolution_target_hours: 4,
   };
   const leaderboard = data.leaderboard || [];
 
@@ -52,11 +60,29 @@ async function loadStaffPerformance() {
         <div class="kpi-value">${summary.total_complaints_resolved || 0}</div>
         <div class="kpi-sub">إجمالي الشكاوى المغلقة</div>
       </div>
+      <div class="kpi-card blue">
+        <div class="kpi-icon">🛎️</div>
+        <div class="kpi-label">طلبات مكتملة</div>
+        <div class="kpi-value">${summary.total_requests_completed || 0}</div>
+        <div class="kpi-sub">طلبات خدمة تم إنجازها</div>
+      </div>
       <div class="kpi-card orange">
         <div class="kpi-icon">⚡</div>
         <div class="kpi-label">متوسط زمن الحل</div>
         <div class="kpi-value">${Number(summary.avg_response_hours || 0).toFixed(1)} س</div>
         <div class="kpi-sub">كل ما قل كان أفضل</div>
+      </div>
+      <div class="kpi-card green">
+        <div class="kpi-icon">🎯</div>
+        <div class="kpi-label">التزام SLA للاستجابة</div>
+        <div class="kpi-value">${Number(summary.first_response_sla_rate || 0).toFixed(1)}%</div>
+        <div class="kpi-sub">هدف ${summary.sla_first_response_target_minutes || 15} دقيقة</div>
+      </div>
+      <div class="kpi-card green">
+        <div class="kpi-icon">🧩</div>
+        <div class="kpi-label">التزام SLA للحل</div>
+        <div class="kpi-value">${Number(summary.resolution_sla_rate || 0).toFixed(1)}%</div>
+        <div class="kpi-sub">هدف ${summary.sla_resolution_target_hours || 4} ساعات</div>
       </div>
       <div class="kpi-card blue">
         <div class="kpi-icon">🕒</div>
@@ -69,6 +95,12 @@ async function loadStaffPerformance() {
         <div class="kpi-label">معدل الرفض</div>
         <div class="kpi-value">${Number(summary.rejection_rate || 0).toFixed(1)}%</div>
         <div class="kpi-sub">نسبة الحجوزات المرفوضة</div>
+      </div>
+      <div class="kpi-card red">
+        <div class="kpi-icon">⏱️</div>
+        <div class="kpi-label">تجاوزات SLA</div>
+        <div class="kpi-value">${(summary.first_response_sla_breached || 0) + (summary.resolution_sla_breached || 0)}</div>
+        <div class="kpi-sub">استجابة: ${summary.first_response_sla_breached || 0} | حل: ${summary.resolution_sla_breached || 0}</div>
       </div>
     </div>
 
@@ -87,9 +119,12 @@ async function loadStaffPerformance() {
             <th>الدور</th>
             <th>حل الشكاوى</th>
             <th>تأكيد الحجوزات</th>
+            <th>إكمال الطلبات</th>
             <th>إجمالي العمليات</th>
             <th>متوسط زمن الحل (س)</th>
             <th>متوسط اعتماد الحجز (س)</th>
+            <th>التزام SLA استجابة</th>
+            <th>التزام SLA حل</th>
             <th>اتجاه 6 أسابيع</th>
             <th>آخر نشاط</th>
             <th>النقاط</th>
@@ -105,7 +140,7 @@ async function loadStaffPerformance() {
 
 function renderStaffLeaderboardRows(rows) {
   if (!rows.length) {
-    return '<tr><td colspan="11"><div class="empty-state"><div class="emoji">📭</div>لا توجد بيانات أداء في الفترة المحددة</div></td></tr>';
+    return '<tr><td colspan="13"><div class="empty-state"><div class="emoji">📭</div>لا توجد بيانات أداء في الفترة المحددة</div></td></tr>';
   }
 
   return rows.map((r, idx) => {
@@ -121,9 +156,12 @@ function renderStaffLeaderboardRows(rows) {
         <td>${roleLabel}</td>
         <td>${r.complaints_resolved || 0}</td>
         <td>${r.reservations_approved || 0}</td>
+        <td>${r.requests_completed || 0}</td>
         <td>${r.total_actions || 0}</td>
         <td>${Number(r.avg_resolution_hours || 0).toFixed(2)}</td>
         <td>${Number(r.avg_approval_hours || 0).toFixed(2)}</td>
+        <td>${Number(r.first_response_sla_rate || 0).toFixed(1)}%</td>
+        <td>${Number(r.resolution_sla_rate || 0).toFixed(1)}%</td>
         <td>${renderWeeklyTrend(r.weekly_trend || [])}</td>
         <td>${r.last_activity_at ? fmtDate(r.last_activity_at) : '—'}</td>
         <td><span class="badge" style="background:rgba(124,58,237,.2);color:#c4b5fd;border:1px solid rgba(124,58,237,.35)">${r.score || 0}</span></td>

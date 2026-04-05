@@ -44,6 +44,10 @@ class Settings(BaseSettings):
     IMAP_PORT: int = 993
     IMAP_ENABLED: bool = True
 
+    # ── SLA Policy ──────────────────────────────────
+    SLA_FIRST_RESPONSE_MINUTES: int = 15
+    SLA_RESOLUTION_HOURS: int = 4
+
     class Config:
         env_file = ".env"
         case_sensitive = True

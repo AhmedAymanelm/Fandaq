@@ -58,6 +58,14 @@ class ReviewResponse(BaseModel):
     comment: str | None = None
     category: str = "general"
     ai_reply_suggestion: str | None = None
+    sentiment: str = "neutral"
+    reply_status: str = "pending_approval"
+    final_reply_text: str | None = None
+    reply_generated_at: datetime | None = None
+    reply_approved_at: datetime | None = None
+    reply_approved_by_name: str | None = None
+    reply_sent_at: datetime | None = None
+    reply_sent_channel: str | None = None
     created_at: datetime
     guest_name: str | None = None
 
@@ -68,3 +76,8 @@ class ReviewListResponse(BaseModel):
     reviews: list[ReviewResponse]
     total: int
     average_rating: float | None = None
+
+
+class ReviewReplyDecision(BaseModel):
+    action: str = Field(..., description="approve, reject, send")
+    final_reply_text: str | None = None

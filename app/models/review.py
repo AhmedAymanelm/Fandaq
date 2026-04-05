@@ -47,6 +47,38 @@ class Review(Base):
         Text, nullable=True,
         comment="AI generated suggested reply to the guest"
     )
+    sentiment: Mapped[str] = mapped_column(
+        String(20), nullable=False, default="neutral", index=True,
+        comment="positive, neutral, negative"
+    )
+    reply_status: Mapped[str] = mapped_column(
+        String(30), nullable=False, default="pending_approval", index=True,
+        comment="auto_sent, pending_approval, approved, sent, rejected"
+    )
+    final_reply_text: Mapped[str | None] = mapped_column(
+        Text, nullable=True,
+        comment="Final reply text chosen for publishing"
+    )
+    reply_generated_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    reply_approved_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    reply_approved_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True, index=True
+    )
+    reply_approved_by_name: Mapped[str | None] = mapped_column(
+        String(255), nullable=True
+    )
+    reply_sent_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    reply_sent_channel: Mapped[str | None] = mapped_column(
+        String(30), nullable=True,
+        comment="auto_policy or manual"
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )

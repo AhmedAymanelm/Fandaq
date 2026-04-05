@@ -7,9 +7,9 @@ import uuid
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import require_role_for_hotel
+from app.api.deps import get_current_user, require_role_for_hotel
 from app.database import get_db
-from app.models.user import UserRole
+from app.models.user import User, UserRole
 from app.models.guest_request import RequestStatus
 from app.schemas.guest_request import (
     GuestRequestCreate, GuestRequestResponse,
@@ -69,10 +69,11 @@ async def update_request_status(
     request_id: uuid.UUID,
     data: GuestRequestStatusUpdate,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """Update guest request status."""
     request = await GuestRequestService.update_status(
-        db, hotel_id, request_id, data.status
+        db, hotel_id, request_id, data.status, actor_user=current_user
     )
     if not request:
         raise HTTPException(status_code=404, detail="Guest request not found")

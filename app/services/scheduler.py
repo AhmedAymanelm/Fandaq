@@ -208,27 +208,24 @@ async def send_financial_alerts():
 
 async def send_automated_daily_pricing_reports():
     """
-    Sends the competitor daily prices summary to hotel owners at the end of the day.
+    Sends the combined pricing + staff report daily at midnight.
+    At 00:00 we send yesterday's report so the day is complete.
     """
-    today = date.today()
-    logger.info(f"📊 Running automated daily pricing reports for: {today}")
+    report_date = date.today() - timedelta(days=1)
+    logger.info(f"📊 Running automated midnight reports for: {report_date}")
 
     async with async_session_factory() as db:
         # Get active hotels
         hotels_result = await db.execute(select(Hotel).where(Hotel.is_active == True))
         hotels = hotels_result.scalars().all()
 
-        from app.services.report_delivery import send_combined_pricing_staff_report, fetch_pricing_rows
+        from app.services.report_delivery import send_combined_pricing_staff_report
         for hotel in hotels:
-            prices = await fetch_pricing_rows(db, hotel.id, today)
-            if not prices:
-                continue
-
             try:
                 result = await send_combined_pricing_staff_report(
                     db=db,
                     hotel=hotel,
-                    report_date=today,
+                    report_date=report_date,
                     staff_days=30,
                 )
                 if result.get("success"):
@@ -259,10 +256,10 @@ def init_scheduler():
     scheduler.add_job(scrape_competitors_job, "cron", hour=8, minute=0)
     scheduler.add_job(send_pre_arrival_reminders, "cron", hour=18, minute=0)
     scheduler.add_job(send_financial_alerts, "cron", hour=21, minute=0)
-    scheduler.add_job(send_automated_daily_pricing_reports, "cron", hour=23, minute=55)
+    scheduler.add_job(send_automated_daily_pricing_reports, "cron", hour=0, minute=0)
     
     # Poll for email replies every 10 seconds for instant responsiveness
     scheduler.add_job(poll_email_replies_job, "interval", seconds=10)
     
     scheduler.start()
-    logger.info("✅ Scheduler: Scraper, Reminders, Finance, PricingReport + EmailAgent(10s)")
+    logger.info("✅ Scheduler: Scraper, Reminders, Finance, MidnightReport(00:00) + EmailAgent(10s)")

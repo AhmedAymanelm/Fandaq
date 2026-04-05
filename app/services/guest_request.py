@@ -9,6 +9,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.guest_request import GuestRequest, RequestStatus
+from app.models.user import User
 
 
 class GuestRequestService:
@@ -39,6 +40,7 @@ class GuestRequestService:
         hotel_id: uuid.UUID,
         request_id: uuid.UUID,
         status: RequestStatus,
+        actor_user: User | None = None,
     ) -> GuestRequest | None:
         """Update the status of a guest request."""
         stmt = select(GuestRequest).where(
@@ -51,9 +53,33 @@ class GuestRequestService:
         if not request:
             return None
 
+        previous_status = request.status
         request.status = status
+
+        if status == RequestStatus.IN_PROGRESS and previous_status == RequestStatus.OPEN:
+            if not request.acknowledged_at:
+                request.acknowledged_at = datetime.utcnow()
+            if actor_user and not request.first_response_by_user_id:
+                request.first_response_by_user_id = actor_user.id
+                request.first_response_by_name = actor_user.full_name
+
         if status == RequestStatus.COMPLETED:
+            if not request.acknowledged_at:
+                request.acknowledged_at = datetime.utcnow()
+            if actor_user and not request.first_response_by_user_id:
+                request.first_response_by_user_id = actor_user.id
+                request.first_response_by_name = actor_user.full_name
             request.completed_at = datetime.utcnow()
+            if actor_user:
+                request.completed_by_user_id = actor_user.id
+                request.completed_by_name = actor_user.full_name
+        elif status == RequestStatus.OPEN:
+            request.acknowledged_at = None
+            request.first_response_by_user_id = None
+            request.first_response_by_name = None
+            request.completed_by_user_id = None
+            request.completed_by_name = None
+            request.completed_at = None
 
         await db.flush()
         return request

@@ -3,7 +3,7 @@ Availability service — check room availability per hotel.
 """
 
 import uuid
-from datetime import date
+from datetime import date, timedelta
 
 from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -14,6 +14,94 @@ from app.models.room_type import RoomType
 
 
 class AvailabilityService:
+
+    @staticmethod
+    async def detect_overbooking_conflicts(
+        db: AsyncSession,
+        hotel_id: uuid.UUID,
+        lookahead_days: int = 30,
+    ) -> dict:
+        """Detect room-type level overbooking by calculating peak concurrent reservations."""
+        start_date = date.today()
+        end_date = start_date + timedelta(days=max(1, lookahead_days))
+
+        rt_stmt = select(RoomType).where(RoomType.hotel_id == hotel_id)
+        room_types = (await db.execute(rt_stmt)).scalars().all()
+
+        status_filter = [
+            ReservationStatus.PENDING,
+            ReservationStatus.CONFIRMED,
+            ReservationStatus.CHECKED_IN,
+        ]
+
+        conflicts = []
+        for rt in room_types:
+            res_stmt = select(Reservation).where(
+                Reservation.hotel_id == hotel_id,
+                Reservation.room_type_id == rt.id,
+                Reservation.status.in_(status_filter),
+                Reservation.check_in < end_date,
+                Reservation.check_out > start_date,
+            )
+            reservations = (await db.execute(res_stmt)).scalars().all()
+
+            if not reservations:
+                continue
+
+            # Sweep-line over date events to find peak concurrent bookings.
+            events = []
+            for r in reservations:
+                in_date = max(r.check_in, start_date)
+                out_date = min(r.check_out, end_date)
+                events.append((in_date, 1))
+                events.append((out_date, -1))
+
+            # Start events should be applied before end events on the same day.
+            events.sort(key=lambda item: (item[0], -item[1]))
+
+            current = 0
+            peak = 0
+            peak_date = None
+            for d, delta in events:
+                current += delta
+                if current > peak:
+                    peak = current
+                    peak_date = d
+
+            if peak > rt.total_units:
+                conflicts.append({
+                    "room_type_id": str(rt.id),
+                    "room_type": rt.name,
+                    "total_units": int(rt.total_units),
+                    "peak_reserved": int(peak),
+                    "overbooked_by": int(peak - rt.total_units),
+                    "peak_date": peak_date.isoformat() if peak_date else None,
+                    "window_start": start_date.isoformat(),
+                    "window_end": end_date.isoformat(),
+                })
+
+        return {
+            "safe": len(conflicts) == 0,
+            "conflict_count": len(conflicts),
+            "conflicts": conflicts,
+            "lookahead_days": lookahead_days,
+        }
+
+    @staticmethod
+    async def suggest_alternative_room_types(
+        db: AsyncSession,
+        hotel_id: uuid.UUID,
+        check_in: date,
+        check_out: date,
+    ) -> list[dict]:
+        """Suggest room types that still have available units for the requested range."""
+        availability = await AvailabilityService.check(
+            db=db,
+            hotel_id=hotel_id,
+            check_in=check_in,
+            check_out=check_out,
+        )
+        return [a for a in availability if int(a.get("available_units", 0)) > 0]
 
     @staticmethod
     async def check(

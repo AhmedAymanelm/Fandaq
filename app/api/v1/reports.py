@@ -24,7 +24,7 @@ router = APIRouter()
 @router.get(
     "/hotels/{hotel_id}/reports/daily",
     response_model=ReportResponse,
-    dependencies=[Depends(require_role_for_hotel(UserRole.ADMIN))],
+    dependencies=[Depends(require_role_for_hotel(UserRole.ADMIN, UserRole.SUPERVISOR))],
 )
 async def daily_report(
     hotel_id: uuid.UUID,
@@ -40,7 +40,7 @@ async def daily_report(
 @router.get(
     "/hotels/{hotel_id}/reports/weekly",
     response_model=ReportResponse,
-    dependencies=[Depends(require_role_for_hotel(UserRole.ADMIN))],
+    dependencies=[Depends(require_role_for_hotel(UserRole.ADMIN, UserRole.SUPERVISOR))],
 )
 async def weekly_report(
     hotel_id: uuid.UUID,
@@ -56,7 +56,7 @@ async def weekly_report(
 @router.get(
     "/hotels/{hotel_id}/reports/monthly",
     response_model=ReportResponse,
-    dependencies=[Depends(require_role_for_hotel(UserRole.ADMIN))],
+    dependencies=[Depends(require_role_for_hotel(UserRole.ADMIN, UserRole.SUPERVISOR))],
 )
 async def monthly_report(
     hotel_id: uuid.UUID,
@@ -120,9 +120,18 @@ async def export_staff_performance_report(
         ("الموظفين النشطين", summary["active_staff"]),
         ("إجمالي الشكاوى المحلولة", summary["total_complaints_resolved"]),
         ("إجمالي الحجوزات المعتمدة", summary["total_reservations_approved"]),
+        ("إجمالي الطلبات المكتملة", summary["total_requests_completed"]),
         ("متوسط زمن حل الشكاوى (ساعات)", summary["avg_response_hours"]),
         ("متوسط زمن اعتماد الحجز (ساعات)", summary["avg_approval_hours"]),
         ("معدل الرفض (%)", summary["rejection_rate"]),
+        ("هدف SLA للاستجابة الأولى (دقائق)", summary["sla_first_response_target_minutes"]),
+        ("نسبة الالتزام باستجابة SLA (%)", summary["first_response_sla_rate"]),
+        ("إجمالي حالات SLA للاستجابة", summary["first_response_sla_total"]),
+        ("عدد تجاوزات SLA للاستجابة", summary["first_response_sla_breached"]),
+        ("هدف SLA للحل (ساعات)", summary["sla_resolution_target_hours"]),
+        ("نسبة الالتزام بحل SLA (%)", summary["resolution_sla_rate"]),
+        ("إجمالي حالات SLA للحل", summary["resolution_sla_total"]),
+        ("عدد تجاوزات SLA للحل", summary["resolution_sla_breached"]),
         ("الفترة", f"{payload['period_start']} -> {payload['period_end']}"),
     ]
     for row in summary_rows:
@@ -142,9 +151,15 @@ async def export_staff_performance_report(
         "الدور",
         "حل الشكاوى",
         "تأكيد الحجوزات",
+        "إكمال الطلبات",
         "إجمالي العمليات",
         "متوسط زمن الحل (س)",
         "متوسط زمن الاعتماد (س)",
+        "متوسط إكمال الطلبات (س)",
+        "التزام SLA الاستجابة (%)",
+        "التزام SLA الحل (%)",
+        "تجاوزات SLA الاستجابة",
+        "تجاوزات SLA الحل",
         "النقاط",
         "آخر نشاط",
     ] + [f"أسبوع {w}" for w in week_headers]
@@ -163,9 +178,15 @@ async def export_staff_performance_report(
             row["role"],
             row["complaints_resolved"],
             row["reservations_approved"],
+            row["requests_completed"],
             row["total_actions"],
             row["avg_resolution_hours"],
             row["avg_approval_hours"],
+            row["avg_request_completion_hours"],
+            row["first_response_sla_rate"],
+            row["resolution_sla_rate"],
+            row["first_response_sla_breached"],
+            row["resolution_sla_breached"],
             row["score"],
             row["last_activity_at"] or "-",
             *week_values,
