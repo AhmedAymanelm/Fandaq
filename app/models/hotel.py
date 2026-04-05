@@ -30,6 +30,10 @@ class Hotel(Base):
         String(20), nullable=False,
         comment="Owner phone number for approval messages"
     )
+    owner_email: Mapped[str | None] = mapped_column(
+        String(255), nullable=True,
+        comment="Owner email address for receiving reports"
+    )
     webhook_verify_token: Mapped[str] = mapped_column(
         String(255), nullable=True,
         comment="Per-hotel webhook verification token"

@@ -10,6 +10,7 @@ from pydantic import BaseModel, Field
 class HotelCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=255)
     owner_whatsapp: str = Field(..., min_length=1, max_length=20)
+    owner_email: str | None = None
     whatsapp_number: str | None = None
     whatsapp_phone_number_id: str | None = None
     webhook_verify_token: str | None = None
@@ -24,6 +25,7 @@ class HotelUpdate(BaseModel):
     whatsapp_number: str | None = None
     whatsapp_phone_number_id: str | None = None
     owner_whatsapp: str | None = None
+    owner_email: str | None = None
     webhook_verify_token: str | None = None
     whatsapp_api_token: str | None = None
     telegram_bot_token: str | None = None
@@ -38,6 +40,7 @@ class HotelResponse(BaseModel):
     whatsapp_number: str | None = None
     whatsapp_phone_number_id: str | None = None
     owner_whatsapp: str
+    owner_email: str | None = None
     whatsapp_api_token: str | None = None
     telegram_bot_token: str | None = None
     address: str | None = None

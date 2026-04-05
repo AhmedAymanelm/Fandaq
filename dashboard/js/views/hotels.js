@@ -57,7 +57,8 @@ function showAddHotelModal() {
   const body = `
     <div class="form-group"><label>اسم الفندق / الفرع</label><input type="text" id="m-h-name"></div>
     <div class="form-group"><label>رقم هاتف المالك (للإشعارات)</label><input type="text" id="m-h-owner" placeholder="مثال: 2010..."></div>
-    
+    <div class="form-group"><label>البريد الإلكتروني للمالك (لاستقبال تقارير الإكسل)</label><input type="email" id="m-h-owner-email" placeholder="example@gmail.com"></div>
+
     <div style="margin:16px 0 8px;padding:8px 12px;background:rgba(255,255,255,0.05);border-radius:8px;border:1px solid var(--border)">
       <p style="margin:0 0 4px;font-size:0.85em;color:var(--text-muted)">📱 قنوات التواصل — <strong>يكفي تفعّل قناة وحدة على الأقل</strong></p>
     </div>
@@ -81,6 +82,7 @@ function showAddHotelModal() {
 function submitHotel() {
   const name = document.getElementById('m-h-name').value.trim();
   const owner = document.getElementById('m-h-owner').value.trim();
+  const ownerEmail = document.getElementById('m-h-owner-email').value.trim() || null;
   const wa = document.getElementById('m-h-wa').value.trim() || null;
   const wid = document.getElementById('m-h-wid').value.trim() || null;
   const waToken = document.getElementById('m-h-wa-token').value.trim() || null;
@@ -91,7 +93,7 @@ function submitHotel() {
   if ((wa || wid) && (!wa || !wid)) return showToast('إذا تبي واتساب، لازم تحط الرقم + Phone Number ID', 'error');
 
   closeModal();
-  addHotel({ name, whatsapp_number: wa, whatsapp_phone_number_id: wid, owner_whatsapp: owner, whatsapp_api_token: waToken, telegram_bot_token: tgToken });
+  addHotel({ name, whatsapp_number: wa, whatsapp_phone_number_id: wid, owner_whatsapp: owner, owner_email: ownerEmail, whatsapp_api_token: waToken, telegram_bot_token: tgToken });
 }
 async function addHotel(data) {
   try {
@@ -106,6 +108,7 @@ function showEditHotelModal(id) {
   const body = `
     <div class="form-group"><label>اسم الفندق</label><input type="text" id="e-h-name" value="${h.name}"></div>
     <div class="form-group"><label>رقم هاتف المالك</label><input type="text" id="e-h-owner" value="${h.owner_whatsapp}"></div>
+    <div class="form-group"><label>البريد الإلكتروني للمالك</label><input type="email" id="e-h-owner-email" value="${h.owner_email || ''}"></div>
 
     <div style="margin:16px 0 8px;padding:8px 12px;background:rgba(255,255,255,0.05);border-radius:8px;border:1px solid var(--border)">
       <p style="margin:0 0 4px;font-size:0.85em;color:var(--text-muted)">📱 قنوات التواصل — <strong>يكفي قناة وحدة على الأقل</strong></p>
@@ -138,6 +141,7 @@ async function submitEditHotel(id) {
   const data = {
     name: document.getElementById('e-h-name').value.trim(),
     owner_whatsapp: document.getElementById('e-h-owner').value.trim(),
+    owner_email: document.getElementById('e-h-owner-email').value.trim() || null,
     whatsapp_number: wa,
     whatsapp_phone_number_id: wid,
     whatsapp_api_token: document.getElementById('e-h-wa-token').value.trim() || null,

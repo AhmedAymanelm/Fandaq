@@ -1,0 +1,3 @@
+Host: smtp.gmail.com, Port: 465, User: ahmedhsayman@gmail.com
+Failed with StartTLS/NoTLS: Error connecting to smtp.gmail.com on port 465: Unexpected EOF received
+Success with TLS=True!

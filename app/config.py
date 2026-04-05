@@ -32,9 +32,22 @@ class Settings(BaseSettings):
     # ── Telegram Bot API ─────────────────────────────
     TELEGRAM_BOT_TOKEN: str = ""
 
+    # ── Email SMTP ───────────────────────────────────
+    SMTP_HOST: str = "smtp.gmail.com"
+    SMTP_PORT: int = 465
+    SMTP_USER: str = ""
+    SMTP_PASSWORD: str = ""
+    SENDER_EMAIL: str = ""
+
+    # ── Email IMAP ───────────────────────────────────
+    IMAP_HOST: str = "imap.gmail.com"
+    IMAP_PORT: int = 993
+    IMAP_ENABLED: bool = True
+
     class Config:
         env_file = ".env"
         case_sensitive = True
+        extra = "ignore"
 
 
 @lru_cache()

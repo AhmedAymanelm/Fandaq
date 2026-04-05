@@ -195,9 +195,9 @@ async function savePricing() {
 
 async function deletePricing(id) {
   confirmAction(
-    '🗑️ مسح التسعيرة؟', 
-    'هل تريد فعلاً مسح هذه التسعيرة؟ لن تتمكن من التراجع عن هذا الإجراء.', 
-    'نعم، امسح', 
+    '🗑️ مسح التسعيرة؟',
+    'هل تريد فعلاً مسح هذه التسعيرة؟ لن تتمكن من التراجع عن هذا الإجراء.',
+    'نعم، امسح',
     async () => {
       try {
         await apiFetch('/hotels/' + HOTEL_ID + '/daily-pricing/' + id, { method: 'DELETE' });
@@ -213,40 +213,77 @@ async function deletePricing(id) {
 function downloadPricingExcel(dateStr) {
   // Directly trigger a file download using the valid JWT token in query string if needed, 
   // or by fetching a Blob. Fetching a Blob is safer to inject headers.
-  const token = localStorage.getItem('access_token');
-  fetch(`${API_URL}/hotels/${HOTEL_ID}/daily-pricing/export?date=${dateStr}`, {
+  const token = sessionStorage.getItem('token');
+  fetch(`${API}/hotels/${HOTEL_ID}/daily-pricing/export?date=${dateStr}`, {
     headers: { 'Authorization': `Bearer ${token}` }
   })
-  .then(res => {
-    if (!res.ok) throw new Error('Network response was not ok');
-    return res.blob();
-  })
-  .then(blob => {
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.style.display = 'none';
-    a.href = url;
-    // filename from API matches daily_pricing_YYYYMMDD.csv
-    a.download = `daily_pricing_${dateStr}.csv`;
-    document.body.appendChild(a);
-    a.click();
-    window.URL.revokeObjectURL(url);
-  })
-  .catch(() => showToast('حدث خطأ أثناء تحميل التقرير', 'error'));
+    .then(res => {
+      if (!res.ok) throw new Error('Network response was not ok');
+      return res.blob();
+    })
+    .then(blob => {
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.style.display = 'none';
+      a.href = url;
+      // filename from API matches daily_pricing_YYYYMMDD.xlsx
+      a.download = `daily_pricing_${dateStr}.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+    })
+    .catch(() => showToast('حدث خطأ أثناء تحميل التقرير', 'error'));
 }
 
 async function sendPricingReport(dateStr) {
-  confirmAction(
-    '📤 إرسال التقرير', 
-    `هل تود إرسال تقرير أسعار يوم ${dateStr} لمالك الفندق الآن للواتساب/تيليجرام؟`, 
-    'إرسال', 
-    async () => {
-      try {
-        await apiFetch(`/hotels/${HOTEL_ID}/daily-pricing/send-report?date=${dateStr}`, { method: 'POST' });
-        showToast('تم إرسال التقرير بنجاح للمالك ✨');
-      } catch (e) {
-        showToast('حدث خطأ أثناء إرسال التقرير.', 'error');
-      }
+  // Find hotel owner number
+  const h = typeof GLOBAL_DATA !== 'undefined' ? (GLOBAL_DATA.all_hotels_list || GLOBAL_DATA.all_hotels || []).find(x => x.id === HOTEL_ID) : null;
+  if (!h || !h.owner_whatsapp) {
+    showToast('لم يتم العثور على رقم واتساب للمالك في إعدادات الفندق', 'error');
+    return;
+  }
+
+  // Get items for this date from the API (since local variable won't be in scope from load function)
+  try {
+    const data = await apiFetch(`/hotels/${HOTEL_ID}/daily-pricing?from_date=${dateStr}&to_date=${dateStr}`);
+    const items = data.items || [];
+
+    if (items.length === 0) {
+      showToast('لا توجد تسعيرات مسجلة لهذا اليوم', 'error');
+      return;
     }
-  );
+
+    const msgLines = [
+      `📊 *تقرير أسعار المنافسين اليومي*`,
+      `🏨 الفندق: *${h.name}*`,
+      `📅 التاريخ: ${dateStr}\n`
+    ];
+
+    items.forEach(p => {
+      const diff = p.my_price - p.competitor_price;
+      let diffMark = "نفس السعر";
+      if (diff > 0) diffMark = `أرخص منا بـ ${diff}`;
+      else if (diff < 0) diffMark = `أغلى منا بـ ${Math.abs(diff)}`;
+
+      msgLines.push(`• *${p.competitor_hotel_name}*: ${p.competitor_price} ريال (نحن: ${p.my_price} ريال) ⟵ ${diffMark}`);
+    });
+
+    msgLines.push(`\nتم إصدار التقرير من نظام إدارة الفنادق الذكي ✨`);
+
+    const textMsg = encodeURIComponent(msgLines.join('\n'));
+    // clean phone number (remove +, spaces, leading zeros logic if needed, usually just raw)
+    let phone = h.owner_whatsapp.replace(/\D/g, '');
+    if (phone.startsWith('00')) phone = phone.substring(2);
+
+    // 1. Call Backend API to trigger native AI Email generation and automated routing
+    await apiFetch(`/hotels/${HOTEL_ID}/daily-pricing/send-report?date=${dateStr}`, { method: 'POST' }).catch(() => null);
+
+    // 2. Open WhatsApp fallback deep link for the user
+    showToast('جاري تحويلك للواتساب وإرسال الإيميل إن وجد...');
+    window.open(`https://wa.me/${phone}?text=${textMsg}`, '_blank');
+
+  } catch (e) {
+    showToast('حدث خطأ أثناء تحضير التقرير', 'error');
+  }
 }
+
