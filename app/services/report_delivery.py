@@ -233,6 +233,7 @@ async def send_combined_pricing_staff_report(
 
     subject = f"تقرير موحد: الأسعار + تقييم الموظفين - {hotel.name} - {report_date:%Y-%m-%d}"
     sent_to = []
+    failed_reasons: list[str] = []
     for email in recipients:
         try:
             await send_email_with_attachment(
@@ -245,10 +246,12 @@ async def send_combined_pricing_staff_report(
             sent_to.append(email)
         except Exception as ex:
             logger.error("❌ Failed sending combined report to %s: %s", email, ex)
+            failed_reasons.append(f"{email}: {str(ex)}")
 
     return {
         "success": len(sent_to) > 0,
-        "message": "Combined report sent" if sent_to else "Failed to send combined report",
+        "message": "Combined report sent" if sent_to else (failed_reasons[0] if failed_reasons else "Failed to send combined report"),
         "recipients": sent_to,
+        "failed": failed_reasons,
         "total_recipients": len(sent_to),
     }

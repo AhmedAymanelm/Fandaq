@@ -3,6 +3,7 @@ Daily Pricing API — manage daily prices for competitors vs our hotel.
 """
 
 import uuid
+import logging
 from datetime import date
 from typing import Optional
 
@@ -27,6 +28,8 @@ router = APIRouter(
     tags=["Daily Pricing"],
     dependencies=[Depends(require_role_for_hotel(UserRole.ADMIN, UserRole.SUPERVISOR))],
 )
+
+logger = logging.getLogger(__name__)
 
 
 async def _validate_room_type_belongs_to_hotel(
@@ -252,6 +255,8 @@ async def send_daily_pricing_report(
     from app.models.hotel import Hotel
     from app.services.report_delivery import send_combined_pricing_staff_report
 
+    logger.info("📤 send-report requested: hotel=%s date=%s", hotel_id, report_date)
+
     hotel = await db.get(Hotel, hotel_id)
     if not hotel:
         raise HTTPException(404, "Hotel not found")
@@ -262,6 +267,7 @@ async def send_daily_pricing_report(
         report_date=report_date,
         staff_days=30,
     )
+    logger.info("📤 send-report result: hotel=%s success=%s recipients=%s message=%s", hotel_id, result.get("success"), result.get("recipients", []), result.get("message"))
     if not result.get("success"):
         raise HTTPException(400, result.get("message", "فشل إرسال التقرير"))
 
